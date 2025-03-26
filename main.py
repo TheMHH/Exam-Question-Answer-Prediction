@@ -1,17 +1,17 @@
 import argparse
 import os
-from train import Trainer
-from test import Evaluator
-from inference import Inferencer
+from train import ExamTrainer
+from test import ExamEvaluator
+from inference import ExamInferencer
 
 def main():
-    parser = argparse.ArgumentParser(description="Image-Text-to-Text Model Project")
+    parser = argparse.ArgumentParser(description="Exam Question Answering Model")
     parser.add_argument("--mode", choices=["train", "test", "infer"], required=True,
                       help="Operation mode: train, test, or infer")
     parser.add_argument("--model", choices=["gemma-it", "gemma-pt"], required=True,
                       help="Model type to use")
     parser.add_argument("--checkpoint", help="Path to a model checkpoint")
-    parser.add_argument("--image", help="Path to an image file for inference")
+    parser.add_argument("--image", help="Path to an exam question image file")
     parser.add_argument("--batch_size", type=int, default=8,
                       help="Batch size for training/evaluation")
     parser.add_argument("--learning_rate", type=float, default=1e-5,
@@ -26,7 +26,7 @@ def main():
     
     if args.mode == "train":
         # Initialize trainer
-        trainer = Trainer(
+        trainer = ExamTrainer(
             model_type=args.model,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
@@ -38,7 +38,7 @@ def main():
         
     elif args.mode == "test":
         # Initialize evaluator
-        evaluator = Evaluator(
+        evaluator = ExamEvaluator(
             model_type=args.model,
             batch_size=args.batch_size
         )
@@ -51,16 +51,19 @@ def main():
             raise ValueError("--image argument is required for inference mode")
         
         # Initialize inferencer
-        inferencer = Inferencer(args.model)
+        inferencer = ExamInferencer(args.model)
         
-        # Generate text from image
-        generated_text = inferencer.generate_text(
+        # Predict answer for the exam question
+        result = inferencer.predict_answer(
             args.image,
             checkpoint_path=args.checkpoint
         )
         
-        print("\nGenerated Text:")
-        print(generated_text)
+        print("\nPrediction Results:")
+        print(f"Predicted Answer: {result['predicted_answer']}")
+        print("\nConfidence Scores:")
+        for answer, score in result['confidence_scores'].items():
+            print(f"{answer}: {score:.4f}")
 
 if __name__ == "__main__":
     main() 

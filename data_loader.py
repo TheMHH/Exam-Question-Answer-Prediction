@@ -18,6 +18,11 @@ class ImageTextDataset(Dataset):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.max_length = max_length
+        
+        # Create answer mapping
+        self.answer_mapping = {
+            'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4
+        }
 
     def __len__(self) -> int:
         return len(self.dataset)
@@ -30,17 +35,22 @@ class ImageTextDataset(Dataset):
             idx (int): Index of the item
             
         Returns:
-            Dict: Dictionary containing processed image and text data
+            Dict: Dictionary containing processed image and label
         """
         item = self.dataset[idx]
         
         # Process image
         image = Image.open(item['image']).convert('RGB')
         
-        # Process text
-        text = item['text']
+        # Convert answer key to numeric label
+        label = self.answer_mapping[item['answer_key']]
+        
+        # Create input prompt
+        prompt = "Look at this exam question image and select the correct answer choice (A, B, C, D, or E):"
+        
+        # Tokenize prompt
         encoding = self.tokenizer(
-            text,
+            prompt,
             max_length=self.max_length,
             padding='max_length',
             truncation=True,
@@ -50,10 +60,11 @@ class ImageTextDataset(Dataset):
         return {
             'image': image,
             'input_ids': encoding['input_ids'].squeeze(),
-            'attention_mask': encoding['attention_mask'].squeeze()
+            'attention_mask': encoding['attention_mask'].squeeze(),
+            'label': torch.tensor(label, dtype=torch.long)
         }
 
-class DataLoader:
+class ExamDataLoader:
     def __init__(self, batch_size: int = 8, max_length: int = 512):
         """
         Initialize the data loader.

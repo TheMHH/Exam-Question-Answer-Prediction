@@ -1,9 +1,10 @@
 import torch
+import torch.nn.functional as F
 from PIL import Image
-from typing import Optional
+from typing import Optional, Dict
 from model_loader import ModelLoader
 
-class Inferencer:
+class ExamInferencer:
     def __init__(
         self,
         model_type: str,
@@ -22,6 +23,11 @@ class Inferencer:
         # Initialize model loader
         self.model_loader = ModelLoader(model_type, device)
         self.model, self.tokenizer = self.model_loader.load_model()
+        
+        # Answer mapping
+        self.idx_to_answer = {
+            0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E'
+        }
 
     def load_image(self, image_path: str) -> Image.Image:
         """
@@ -36,26 +42,20 @@ class Inferencer:
         image = Image.open(image_path).convert('RGB')
         return image
 
-    def generate_text(
+    def predict_answer(
         self,
         image_path: str,
-        max_length: int = 512,
-        num_beams: int = 4,
-        temperature: float = 0.7,
         checkpoint_path: Optional[str] = None
-    ) -> str:
+    ) -> Dict:
         """
-        Generate text from an image.
+        Predict the answer for an exam question image.
         
         Args:
             image_path (str): Path to the input image
-            max_length (int): Maximum length of generated text
-            num_beams (int): Number of beams for beam search
-            temperature (float): Temperature for text generation
             checkpoint_path (Optional[str]): Path to a checkpoint to use
             
         Returns:
-            str: Generated text
+            Dict: Dictionary containing predicted answer and confidence scores
         """
         if checkpoint_path:
             self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
@@ -63,11 +63,14 @@ class Inferencer:
         # Load and preprocess image
         image = self.load_image(image_path)
         
+        # Create input prompt
+        prompt = "Look at this exam question image and select the correct answer choice (A, B, C, D, or E):"
+        
         # Prepare inputs
         inputs = self.tokenizer(
-            "",
+            prompt,
             return_tensors="pt",
-            max_length=max_length,
+            max_length=512,
             padding=True,
             truncation=True
         )
@@ -76,61 +79,62 @@ class Inferencer:
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         image = image.to(self.device)
         
-        # Generate text
+        # Generate prediction
         self.model.eval()
         with torch.no_grad():
-            outputs = self.model.generate(
+            outputs = self.model(
                 **inputs,
-                images=image,
-                max_length=max_length,
-                num_beams=num_beams,
-                temperature=temperature,
-                early_stopping=True
+                images=image
             )
+            
+            # Get logits and probabilities
+            logits = self.model.classifier(outputs.last_hidden_state[:, 0, :])
+            probabilities = F.softmax(logits, dim=1)[0]
+            
+            # Get predicted answer
+            pred_idx = torch.argmax(probabilities).item()
+            predicted_answer = self.idx_to_answer[pred_idx]
+            
+            # Get confidence scores for all options
+            confidence_scores = {
+                answer: probabilities[idx].item()
+                for idx, answer in self.idx_to_answer.items()
+            }
         
-        # Decode and return generated text
-        generated_text = self.tokenizer.decode(
-            outputs[0],
-            skip_special_tokens=True
-        )
-        
-        return generated_text
+        return {
+            'predicted_answer': predicted_answer,
+            'confidence_scores': confidence_scores
+        }
 
 def main():
     """
-    Example usage of the Inferencer class.
+    Example usage of the ExamInferencer class.
     """
     import argparse
     
-    parser = argparse.ArgumentParser(description="Generate text from an image")
+    parser = argparse.ArgumentParser(description="Predict answer for exam question image")
     parser.add_argument("--model", choices=["gemma-it", "gemma-pt"], required=True,
                       help="Model type to use")
     parser.add_argument("--image", required=True,
                       help="Path to the input image")
     parser.add_argument("--checkpoint", help="Path to a model checkpoint")
-    parser.add_argument("--max_length", type=int, default=512,
-                      help="Maximum length of generated text")
-    parser.add_argument("--num_beams", type=int, default=4,
-                      help="Number of beams for beam search")
-    parser.add_argument("--temperature", type=float, default=0.7,
-                      help="Temperature for text generation")
     
     args = parser.parse_args()
     
     # Initialize inferencer
-    inferencer = Inferencer(args.model)
+    inferencer = ExamInferencer(args.model)
     
-    # Generate text
-    generated_text = inferencer.generate_text(
+    # Predict answer
+    result = inferencer.predict_answer(
         args.image,
-        max_length=args.max_length,
-        num_beams=args.num_beams,
-        temperature=args.temperature,
         checkpoint_path=args.checkpoint
     )
     
-    print("\nGenerated Text:")
-    print(generated_text)
+    print("\nPrediction Results:")
+    print(f"Predicted Answer: {result['predicted_answer']}")
+    print("\nConfidence Scores:")
+    for answer, score in result['confidence_scores'].items():
+        print(f"{answer}: {score:.4f}")
 
 if __name__ == "__main__":
     main() 

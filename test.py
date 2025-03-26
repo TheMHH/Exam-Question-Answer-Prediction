@@ -1,11 +1,12 @@
 import torch
+import torch.nn.functional as F
 from tqdm import tqdm
 from typing import Dict, List
-from evaluate import load
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from model_loader import ModelLoader
-from data_loader import DataLoader
+from data_loader import ExamDataLoader
 
-class Evaluator:
+class ExamEvaluator:
     def __init__(
         self,
         model_type: str,
@@ -26,12 +27,13 @@ class Evaluator:
         
         # Initialize model and data loaders
         self.model_loader = ModelLoader(model_type, device)
-        self.data_loader = DataLoader(batch_size=batch_size)
+        self.data_loader = ExamDataLoader(batch_size=batch_size)
         self.model, self.tokenizer = self.model_loader.load_model()
         
-        # Initialize metrics
-        self.bleu = load("bleu")
-        self.rouge = load("rouge")
+        # Answer mapping for converting numeric predictions back to letters
+        self.idx_to_answer = {
+            0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E'
+        }
 
     def evaluate(self, checkpoint_path: str = None) -> Dict:
         """
@@ -49,9 +51,9 @@ class Evaluator:
         # Get test dataloader
         _, _, test_loader = self.data_loader.get_all_splits(self.tokenizer)
         
-        # Initialize lists for predictions and references
-        predictions: List[str] = []
-        references: List[str] = []
+        # Initialize lists for predictions and true labels
+        all_predictions = []
+        all_labels = []
         
         # Evaluation phase
         self.model.eval()
@@ -64,6 +66,7 @@ class Evaluator:
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
                 images = batch['image'].to(self.device)
+                labels = batch['label'].to(self.device)
                 
                 # Forward pass
                 outputs = self.model(
@@ -72,65 +75,52 @@ class Evaluator:
                     images=images
                 )
                 
-                loss = outputs.loss
+                # Get logits and calculate loss
+                logits = self.model.classifier(outputs.last_hidden_state[:, 0, :])
+                loss = F.cross_entropy(logits, labels)
                 total_loss += loss.item()
                 
-                # Generate predictions
-                generated_ids = self.model.generate(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    images=images,
-                    max_length=512,
-                    num_beams=4,
-                    early_stopping=True
-                )
+                # Get predictions
+                predictions = torch.argmax(logits, dim=1)
                 
-                # Decode predictions and references
-                batch_predictions = self.tokenizer.batch_decode(
-                    generated_ids,
-                    skip_special_tokens=True
-                )
-                batch_references = self.tokenizer.batch_decode(
-                    input_ids,
-                    skip_special_tokens=True
-                )
-                
-                predictions.extend(batch_predictions)
-                references.extend(batch_references)
+                # Store predictions and labels
+                all_predictions.extend(predictions.cpu().numpy())
+                all_labels.extend(labels.cpu().numpy())
                 
                 # Update progress bar
                 progress_bar.set_postfix({'loss': loss.item()})
         
         # Calculate metrics
         avg_loss = total_loss / len(test_loader)
-        
-        # Calculate BLEU score
-        bleu_score = self.bleu.compute(
-            predictions=predictions,
-            references=[[ref] for ref in references]
+        accuracy = accuracy_score(all_labels, all_predictions)
+        precision, recall, f1, _ = precision_recall_fscore_support(
+            all_labels,
+            all_predictions,
+            average='weighted'
         )
         
-        # Calculate ROUGE scores
-        rouge_scores = self.rouge.compute(
-            predictions=predictions,
-            references=references
-        )
+        # Convert some predictions to answer letters for display
+        pred_answers = [self.idx_to_answer[pred] for pred in all_predictions[:5]]
+        true_answers = [self.idx_to_answer[label] for label in all_labels[:5]]
         
         # Prepare results
         results = {
             'loss': avg_loss,
-            'bleu': bleu_score['bleu'],
-            'rouge1': rouge_scores['rouge1'],
-            'rouge2': rouge_scores['rouge2'],
-            'rougeL': rouge_scores['rougeL']
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1': f1
         }
         
         # Print results
         print("\nEvaluation Results:")
         print(f"Average Loss: {avg_loss:.4f}")
-        print(f"BLEU Score: {bleu_score['bleu']:.4f}")
-        print(f"ROUGE-1: {rouge_scores['rouge1']:.4f}")
-        print(f"ROUGE-2: {rouge_scores['rouge2']:.4f}")
-        print(f"ROUGE-L: {rouge_scores['rougeL']:.4f}")
+        print(f"Accuracy: {accuracy:.4f}")
+        print(f"Precision: {precision:.4f}")
+        print(f"Recall: {recall:.4f}")
+        print(f"F1 Score: {f1:.4f}")
+        print("\nSample Predictions (first 5):")
+        print(f"Predicted: {pred_answers}")
+        print(f"Actual: {true_answers}")
         
         return results 

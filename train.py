@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from tqdm import tqdm
@@ -6,9 +7,9 @@ import os
 from typing import Dict, Optional
 from transformers import get_scheduler
 from model_loader import ModelLoader
-from data_loader import DataLoader
+from data_loader import ExamDataLoader
 
-class Trainer:
+class ExamTrainer:
     def __init__(
         self,
         model_type: str,
@@ -41,11 +42,22 @@ class Trainer:
         
         # Initialize model and data loaders
         self.model_loader = ModelLoader(model_type, device)
-        self.data_loader = DataLoader(batch_size=batch_size)
+        self.data_loader = ExamDataLoader(batch_size=batch_size)
         self.model, self.tokenizer = self.model_loader.load_model()
         
+        # Add classification head if needed
+        if not hasattr(self.model, 'classifier'):
+            self.model.classifier = torch.nn.Linear(
+                self.model.config.hidden_size, 
+                5  # Number of answer choices (A, B, C, D, E)
+            ).to(device)
+        
         # Initialize optimizer and scheduler
-        self.optimizer = AdamW(self.model.parameters(), lr=learning_rate)
+        self.optimizer = AdamW([
+            {'params': self.model.parameters(), 'lr': learning_rate},
+            {'params': self.model.classifier.parameters(), 'lr': learning_rate * 10}
+        ])
+        
         self.scheduler = get_scheduler(
             "cosine",
             optimizer=self.optimizer,
@@ -66,12 +78,14 @@ class Trainer:
         # Get data loaders
         train_loader, val_loader, _ = self.data_loader.get_all_splits(self.tokenizer)
         
-        best_val_loss = float('inf')
+        best_val_acc = 0.0
         
         for epoch in range(self.num_epochs):
             # Training phase
             self.model.train()
             total_train_loss = 0
+            correct_train = 0
+            total_train = 0
             
             progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{self.num_epochs}")
             for batch in progress_bar:
@@ -79,6 +93,7 @@ class Trainer:
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
                 images = batch['image'].to(self.device)
+                labels = batch['label'].to(self.device)
                 
                 # Forward pass
                 outputs = self.model(
@@ -87,8 +102,17 @@ class Trainer:
                     images=images
                 )
                 
-                loss = outputs.loss
+                # Get logits from the last hidden state
+                logits = self.model.classifier(outputs.last_hidden_state[:, 0, :])
+                
+                # Calculate loss and accuracy
+                loss = F.cross_entropy(logits, labels)
                 total_train_loss += loss.item()
+                
+                # Calculate accuracy
+                predictions = torch.argmax(logits, dim=1)
+                correct_train += (predictions == labels).sum().item()
+                total_train += labels.size(0)
                 
                 # Backward pass
                 loss.backward()
@@ -97,19 +121,26 @@ class Trainer:
                 self.optimizer.zero_grad()
                 
                 # Update progress bar
-                progress_bar.set_postfix({'loss': loss.item()})
+                progress_bar.set_postfix({
+                    'loss': loss.item(),
+                    'acc': correct_train / total_train
+                })
             
             avg_train_loss = total_train_loss / len(train_loader)
+            train_accuracy = correct_train / total_train
             
             # Validation phase
             self.model.eval()
             total_val_loss = 0
+            correct_val = 0
+            total_val = 0
             
             with torch.no_grad():
                 for batch in val_loader:
                     input_ids = batch['input_ids'].to(self.device)
                     attention_mask = batch['attention_mask'].to(self.device)
                     images = batch['image'].to(self.device)
+                    labels = batch['label'].to(self.device)
                     
                     outputs = self.model(
                         input_ids=input_ids,
@@ -117,17 +148,26 @@ class Trainer:
                         images=images
                     )
                     
-                    total_val_loss += outputs.loss.item()
+                    logits = self.model.classifier(outputs.last_hidden_state[:, 0, :])
+                    loss = F.cross_entropy(logits, labels)
+                    total_val_loss += loss.item()
+                    
+                    predictions = torch.argmax(logits, dim=1)
+                    correct_val += (predictions == labels).sum().item()
+                    total_val += labels.size(0)
             
             avg_val_loss = total_val_loss / len(val_loader)
+            val_accuracy = correct_val / total_val
             
             print(f"Epoch {epoch + 1}/{self.num_epochs}")
             print(f"Average training loss: {avg_train_loss:.4f}")
+            print(f"Training accuracy: {train_accuracy:.4f}")
             print(f"Average validation loss: {avg_val_loss:.4f}")
+            print(f"Validation accuracy: {val_accuracy:.4f}")
             
-            # Save checkpoint if validation loss improved
-            if avg_val_loss < best_val_loss:
-                best_val_loss = avg_val_loss
+            # Save checkpoint if validation accuracy improved
+            if val_accuracy > best_val_acc:
+                best_val_acc = val_accuracy
                 checkpoint_path = os.path.join(
                     self.checkpoint_dir,
                     f"{self.model_type}_epoch_{epoch + 1}.pt"
