@@ -124,13 +124,5 @@ Trained models are automatically saved to the `checkpoints/` directory:
 
 - Python 3.8+
 - PyTorch 2.1+
-- Transformers 4.37+
+- Transformers 4.50+
 - Other dependencies listed in requirements.txt
-
-## License
-
-[Your chosen license]
-
-## Contributing
-
-[Your contribution guidelines] 
