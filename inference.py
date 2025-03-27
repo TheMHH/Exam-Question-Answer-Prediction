@@ -80,12 +80,10 @@ class ExamInferencer:
         """
         try:
             if image_source.startswith(('http://', 'https://')):
-                # Download image from URL
                 response = requests.get(image_source, timeout=10)
-                response.raise_for_status()  # Raise an error for bad status codes
+                response.raise_for_status()
                 image = Image.open(BytesIO(response.content))
             else:
-                # Load from local path
                 if not os.path.exists(image_source):
                     raise FileNotFoundError(f"Image file not found: {image_source}")
                 image = Image.open(image_source)
