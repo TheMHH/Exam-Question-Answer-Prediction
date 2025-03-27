@@ -121,8 +121,12 @@ class ExamInferencer:
             truncation=True
         )
         
-        # Move inputs and image to device with correct dtype
-        inputs = {k: v.to(self.device, dtype=self.model_dtype) for k, v in inputs.items()}
+        # Move inputs and image to device with correct dtypes
+        # Keep input_ids as long integers, convert other inputs to model dtype
+        inputs = {
+            k: v.to(self.device, dtype=self.model_dtype if k != 'input_ids' else torch.long)
+            for k, v in inputs.items()
+        }
         image = image.to(self.device, dtype=self.model_dtype)
         
         # Generate prediction
