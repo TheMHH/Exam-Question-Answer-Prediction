@@ -94,14 +94,14 @@ class ExamTrainer:
                 )
                 
                 # Get probabilities from the combined model
-                probabilities = outputs.probabilities
+                probabilities = outputs.probabilities[0]
                 
                 # Calculate loss and accuracy
-                loss = F.cross_entropy(probabilities, labels)
+                loss = F.cross_entropy(probabilities.unsqueeze(0), labels)
                 total_train_loss += loss.item()
                 
                 # Calculate accuracy
-                predictions = torch.argmax(probabilities, dim=1)
+                predictions = torch.argmax(probabilities, dim=0)
                 correct_train += (predictions == labels).sum().item()
                 total_train += labels.size(0)
                 
@@ -140,11 +140,11 @@ class ExamTrainer:
                         output_hidden_states=True
                     )
                     
-                    probabilities = outputs.probabilities
-                    loss = F.cross_entropy(probabilities, labels)
+                    probabilities = outputs.probabilities[0]
+                    loss = F.cross_entropy(probabilities.unsqueeze(0), labels)
                     total_val_loss += loss.item()
                     
-                    predictions = torch.argmax(probabilities, dim=1)
+                    predictions = torch.argmax(probabilities, dim=0)
                     correct_val += (predictions == labels).sum().item()
                     total_val += labels.size(0)
             

@@ -35,7 +35,7 @@ def main():
         
         # Train the model
         trainer.train(checkpoint_path=args.checkpoint)
-        
+
     elif args.mode == "test":
         # Initialize evaluator
         evaluator = ExamEvaluator(
@@ -45,7 +45,7 @@ def main():
         
         # Evaluate the model
         evaluator.evaluate(checkpoint_path=args.checkpoint)
-        
+
     elif args.mode == "infer":
         if not args.image:
             raise ValueError("--image argument is required for inference mode")

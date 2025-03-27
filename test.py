@@ -76,14 +76,14 @@ class ExamEvaluator:
                 )
                 
                 # Get probabilities from the combined model
-                probabilities = outputs.probabilities
+                probabilities = outputs.probabilities[0]
                 
                 # Calculate loss
-                loss = F.cross_entropy(probabilities, labels)
+                loss = F.cross_entropy(probabilities.unsqueeze(0), labels)
                 total_loss += loss.item()
                 
                 # Get predictions
-                predictions = torch.argmax(probabilities, dim=1)
+                predictions = torch.argmax(probabilities, dim=0)
                 
                 # Store predictions and labels
                 all_predictions.extend(predictions.cpu().numpy())
