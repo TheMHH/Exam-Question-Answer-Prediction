@@ -11,7 +11,7 @@ This project implements a machine learning system for automatically predicting a
 - Multiple operation modes:
   - Training with validation
   - Model evaluation with detailed metrics
-  - Single question inference
+  - Single question inference (supports both local files and image URLs)
 - Comprehensive evaluation metrics:
   - Accuracy
   - Precision
@@ -85,15 +85,22 @@ This will output:
 
 ### Inference
 
-Predict the answer for a single exam question image:
+Predict the answer for a single exam question image. You can provide either a local file path or an image URL:
 
 ```bash
+# Using a local file
 python main.py --mode infer --model gemma-it \
     --image path/to/question.jpg \
+    --checkpoint checkpoints/gemma-it_final.pt
+
+# Using an image URL
+python main.py --mode infer --model gemma-it \
+    --image https://example.com/question.jpg \
     --checkpoint checkpoints/gemma-it_final.pt
 ```
 
 This will output:
+- Image source type (local or URL)
 - Predicted answer (A, B, C, D, or E)
 - Confidence scores for each option
 

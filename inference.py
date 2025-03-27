@@ -1,8 +1,11 @@
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from typing import Optional, Dict
+from typing import Optional, Dict, Union
 from model_loader import ModelLoader
+import requests
+from io import BytesIO
+import os
 
 class ExamInferencer:
     def __init__(
@@ -29,29 +32,44 @@ class ExamInferencer:
             0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E'
         }
 
-    def load_image(self, image_path: str) -> Image.Image:
+    def load_image(self, image_source: str) -> Image.Image:
         """
-        Load and preprocess an image.
+        Load and preprocess an image from either a URL or local path.
         
         Args:
-            image_path (str): Path to the image file
+            image_source (str): URL or path to the image file
             
         Returns:
             Image.Image: Preprocessed image
         """
-        image = Image.open(image_path).convert('RGB')
-        return image
+        try:
+            if image_source.startswith(('http://', 'https://')):
+                # Download image from URL
+                response = requests.get(image_source, timeout=10)
+                response.raise_for_status()  # Raise an error for bad status codes
+                image = Image.open(BytesIO(response.content))
+            else:
+                # Load from local path
+                if not os.path.exists(image_source):
+                    raise FileNotFoundError(f"Image file not found: {image_source}")
+                image = Image.open(image_source)
+            
+            return image.convert('RGB')
+        except requests.RequestException as e:
+            raise ValueError(f"Error downloading image from URL: {e}")
+        except Exception as e:
+            raise ValueError(f"Error loading image: {e}")
 
     def predict_answer(
         self,
-        image_path: str,
+        image_source: str,
         checkpoint_path: Optional[str] = None
     ) -> Dict:
         """
         Predict the answer for an exam question image.
         
         Args:
-            image_path (str): Path to the input image
+            image_source (str): URL or path to the input image
             checkpoint_path (Optional[str]): Path to a checkpoint to use
             
         Returns:
@@ -61,7 +79,14 @@ class ExamInferencer:
             self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
         
         # Load and preprocess image
-        image = self.load_image(image_path)
+        try:
+            image = self.load_image(image_source)
+        except Exception as e:
+            return {
+                'error': str(e),
+                'predicted_answer': None,
+                'confidence_scores': None
+            }
         
         # Create input prompt
         prompt = "Look at this exam question image and select the correct answer choice (A, B, C, D, or E):"
@@ -103,7 +128,8 @@ class ExamInferencer:
         
         return {
             'predicted_answer': predicted_answer,
-            'confidence_scores': confidence_scores
+            'confidence_scores': confidence_scores,
+            'source_type': 'url' if image_source.startswith(('http://', 'https://')) else 'local'
         }
 
 def main():
@@ -116,7 +142,7 @@ def main():
     parser.add_argument("--model", choices=["gemma-it", "gemma-pt"], required=True,
                       help="Model type to use")
     parser.add_argument("--image", required=True,
-                      help="Path to the input image")
+                      help="URL or path to the input image")
     parser.add_argument("--checkpoint", help="Path to a model checkpoint")
     
     args = parser.parse_args()
@@ -130,11 +156,15 @@ def main():
         checkpoint_path=args.checkpoint
     )
     
-    print("\nPrediction Results:")
-    print(f"Predicted Answer: {result['predicted_answer']}")
-    print("\nConfidence Scores:")
-    for answer, score in result['confidence_scores'].items():
-        print(f"{answer}: {score:.4f}")
+    if 'error' in result:
+        print(f"\nError: {result['error']}")
+    else:
+        print("\nPrediction Results:")
+        print(f"Image Source Type: {result['source_type']}")
+        print(f"Predicted Answer: {result['predicted_answer']}")
+        print("\nConfidence Scores:")
+        for answer, score in result['confidence_scores'].items():
+            print(f"{answer}: {score:.4f}")
 
 if __name__ == "__main__":
     main() 
