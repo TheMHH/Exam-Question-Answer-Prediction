@@ -29,9 +29,12 @@ class ExamInferencer:
         self.model_loader = ModelLoader(model_type, device)
         self.model, self.tokenizer = self.model_loader.load_model()
         
-        # Add classification head
+        # Get model dtype
+        self.model_dtype = next(self.model.parameters()).dtype
+        
+        # Add classification head with matching dtype
         hidden_size = self.model.config.hidden_size
-        self.classifier = torch.nn.Linear(hidden_size, len(IDX_TO_ANSWER)).to(device)
+        self.classifier = torch.nn.Linear(hidden_size, len(IDX_TO_ANSWER)).to(device, dtype=self.model_dtype)
         
         # Answer mapping
         self.idx_to_answer = IDX_TO_ANSWER
@@ -91,9 +94,11 @@ class ExamInferencer:
         """
         if checkpoint_path:
             self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
-            # Recreate classifier after loading checkpoint
+            # Get model dtype
+            self.model_dtype = next(self.model.parameters()).dtype
+            # Recreate classifier after loading checkpoint with matching dtype
             hidden_size = self.model.config.hidden_size
-            self.classifier = torch.nn.Linear(hidden_size, len(IDX_TO_ANSWER)).to(self.device)
+            self.classifier = torch.nn.Linear(hidden_size, len(IDX_TO_ANSWER)).to(self.device, dtype=self.model_dtype)
         
         # Load and preprocess image
         try:
@@ -116,9 +121,9 @@ class ExamInferencer:
             truncation=True
         )
         
-        # Move inputs and image to device
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        image = image.to(self.device)
+        # Move inputs and image to device with correct dtype
+        inputs = {k: v.to(self.device, dtype=self.model_dtype) for k, v in inputs.items()}
+        image = image.to(self.device, dtype=self.model_dtype)
         
         # Generate prediction
         self.model.eval()
