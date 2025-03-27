@@ -13,6 +13,7 @@ class ExamInferencer:
     def __init__(
         self,
         model_type: str,
+        checkpoint_path: Optional[str] = None,
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
     ):
         """
@@ -20,17 +21,20 @@ class ExamInferencer:
         
         Args:
             model_type (str): Type of model to use ("gemma-it" or "gemma-pt")
+            checkpoint_path (Optional[str]): Path to a checkpoint to use
             device (str): Device to run inference on ("cuda" or "cpu")
         """
         self.model_type = model_type
         self.device = device
         
+        # Initialize model loader
         self.model_loader = ModelLoader(model_type, device)
-        self.model, self.tokenizer = self.model_loader.load_model()
+        self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
         
         # Answer mapping
         self.idx_to_answer = IDX_TO_ANSWER
         
+        # Image preprocessing
         self.image_transform = transforms.Compose([
             transforms.Resize((224, 224)),  # Resize to common size
             transforms.ToTensor(),          # Convert to tensor
@@ -66,24 +70,16 @@ class ExamInferencer:
         except Exception as e:
             raise ValueError(f"Error loading image: {e}")
 
-    def predict_answer(
-        self,
-        image_source: str,
-        checkpoint_path: Optional[str] = None
-    ) -> Dict:
+    def predict_answer(self, image_source: str) -> Dict:
         """
         Predict the answer for an exam question image.
         
         Args:
             image_source (str): URL or path to the input image
-            checkpoint_path (Optional[str]): Path to a checkpoint to use
             
         Returns:
             Dict: Dictionary containing predicted answer and confidence scores
         """
-        if checkpoint_path:
-            self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
-        
         try:
             pil_image = self.load_image(image_source)
             image = self.image_transform(pil_image).unsqueeze(0)
@@ -102,26 +98,39 @@ class ExamInferencer:
             truncation=True
         )
         
+        # Move inputs and image to device
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         image = image.to(self.device)
         
         self.model.eval()
         with torch.no_grad():
-            outputs = self.model(
-                **inputs,
-                images=image,
-                output_hidden_states=True
-            )
-            
-            probabilities = outputs.probabilities[0]
-            
-            pred_idx = torch.argmax(probabilities).item()
-            predicted_answer = self.idx_to_answer[pred_idx]
-            
-            confidence_scores = {
-                answer: float(probabilities[idx].item())
-                for idx, answer in self.idx_to_answer.items()
-            }
+            try:
+                # Get model outputs
+                outputs = self.model(
+                    **inputs,
+                    images=image,
+                    output_hidden_states=True
+                )
+                
+                # Get probabilities from the combined model
+                probabilities = outputs.probabilities[0]  # Get first batch item
+                
+                # Get predicted answer
+                pred_idx = torch.argmax(probabilities).item()
+                predicted_answer = self.idx_to_answer[pred_idx]
+                
+                # Get confidence scores for all options
+                confidence_scores = {
+                    answer: float(probabilities[idx].item())
+                    for idx, answer in self.idx_to_answer.items()
+                }
+                
+            except Exception as e:
+                return {
+                    'error': f"Inference error: {str(e)}",
+                    'predicted_answer': None,
+                    'confidence_scores': None
+                }
         
         return {
             'predicted_answer': predicted_answer,
@@ -144,12 +153,9 @@ def main():
     
     args = parser.parse_args()
     
-    inferencer = ExamInferencer(args.model)
+    inferencer = ExamInferencer(args.model, args.checkpoint)
     
-    result = inferencer.predict_answer(
-        args.image,
-        checkpoint_path=args.checkpoint
-    )
+    result = inferencer.predict_answer(args.image)
     
     if 'error' in result:
         print(f"\nError: {result['error']}")

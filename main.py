@@ -30,34 +30,36 @@ def main():
             model_type=args.model,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
-            num_epochs=args.num_epochs
+            num_epochs=args.num_epochs,
+            checkpoint_path=args.checkpoint
         )
         
         # Train the model
-        trainer.train(checkpoint_path=args.checkpoint)
+        trainer.train()
 
     elif args.mode == "test":
         # Initialize evaluator
         evaluator = ExamEvaluator(
             model_type=args.model,
-            batch_size=args.batch_size
+            batch_size=args.batch_size,
+            checkpoint_path=args.checkpoint
         )
         
         # Evaluate the model
-        evaluator.evaluate(checkpoint_path=args.checkpoint)
+        evaluator.evaluate()
 
     elif args.mode == "infer":
         if not args.image:
             raise ValueError("--image argument is required for inference mode")
         
         # Initialize inferencer
-        inferencer = ExamInferencer(args.model)
-        
-        # Predict answer for the exam question
-        result = inferencer.predict_answer(
-            args.image,
+        inferencer = ExamInferencer(
+            model_type=args.model,
             checkpoint_path=args.checkpoint
         )
+        
+        # Predict answer for the exam question
+        result = inferencer.predict_answer(args.image)
         
         print("\nPrediction Results:")
         print(f"Predicted Answer: {result['predicted_answer']}")

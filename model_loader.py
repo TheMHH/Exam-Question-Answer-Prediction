@@ -54,38 +54,18 @@ class ModelLoader:
             nn.Linear(self.config["hidden_size"] // 4, len(IDX_TO_ANSWER))
         )
 
-    def load_model(
-        self,
-        checkpoint_path: Optional[str] = None
-    ) -> Tuple[nn.Module, nn.Module]:
+    def _create_combined_model(self, base_model: nn.Module) -> nn.Module:
         """
-        Load the model and tokenizer.
+        Create a combined model with the base model and classifier.
         
         Args:
-            checkpoint_path (Optional[str]): Path to a model checkpoint
+            base_model (nn.Module): The base model to combine with classifier
             
         Returns:
-            Tuple[nn.Module, nn.Module]: Model and tokenizer
+            nn.Module: Combined model
         """
-        # Load tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(
-            self.config["name"],
-            trust_remote_code=True
-        )
-        
-        # Load model
-        model = AutoModelForCausalLM.from_pretrained(
-            self.config["name"],
-            device_map="auto",
-            trust_remote_code=True,
-            torch_dtype=torch.float16
-        )
-        
-        # Move model to device
-        model = model.to(self.device)
-        
         # Get model dtype
-        model_dtype = next(model.parameters()).dtype
+        model_dtype = next(base_model.parameters()).dtype
         
         # Move classifier to device with matching dtype
         classifier = self.classifier.to(self.device, dtype=model_dtype)
@@ -135,8 +115,49 @@ class ModelLoader:
                 
                 return outputs
         
+        return CombinedModel(base_model, classifier)
+
+    def load_model(
+        self,
+        checkpoint_path: Optional[str] = None
+    ) -> Tuple[nn.Module, nn.Module]:
+        """
+        Load the model and tokenizer.
+        
+        Args:
+            checkpoint_path (Optional[str]): Path to a model checkpoint
+            
+        Returns:
+            Tuple[nn.Module, nn.Module]: Model and tokenizer
+        """
+        # Load tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.config["name"],
+            trust_remote_code=True
+        )
+        
+        if checkpoint_path:
+            # Load from checkpoint
+            base_model = AutoModelForCausalLM.from_pretrained(
+                checkpoint_path,
+                device_map="auto",
+                trust_remote_code=True,
+                torch_dtype=torch.float16
+            )
+        else:
+            # Load base model
+            base_model = AutoModelForCausalLM.from_pretrained(
+                self.config["name"],
+                device_map="auto",
+                trust_remote_code=True,
+                torch_dtype=torch.float16
+            )
+        
+        # Move model to device
+        base_model = base_model.to(self.device)
+        
         # Create combined model
-        combined_model = CombinedModel(model, classifier)
+        combined_model = self._create_combined_model(base_model)
         
         return combined_model, tokenizer
 
@@ -147,8 +168,9 @@ class ModelLoader:
         Args:
             save_path (str): Path to save the model and tokenizer
         """
-        if self.model is None or self.tokenizer is None:
+        if not hasattr(self, 'model') or not hasattr(self, 'tokenizer'):
             raise ValueError("Model and tokenizer must be loaded before saving")
         
-        self.model.save_pretrained(save_path)
+        # Save base model and tokenizer
+        self.model.base_model.save_pretrained(save_path)
         self.tokenizer.save_pretrained(save_path) 

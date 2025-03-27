@@ -17,6 +17,7 @@ class ExamTrainer:
         learning_rate: float = 1e-5,
         num_epochs: int = 3,
         checkpoint_dir: str = "checkpoints",
+        checkpoint_path: Optional[str] = None,
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
     ):
         """
@@ -28,6 +29,7 @@ class ExamTrainer:
             learning_rate (float): Learning rate for optimization
             num_epochs (int): Number of training epochs
             checkpoint_dir (str): Directory to save checkpoints
+            checkpoint_path (Optional[str]): Path to a checkpoint to resume training from
             device (str): Device to train on ("cuda" or "cpu")
         """
         self.model_type = model_type
@@ -43,10 +45,14 @@ class ExamTrainer:
         # Initialize model and data loaders
         self.model_loader = ModelLoader(model_type, device)
         self.data_loader = ExamDataLoader(batch_size=batch_size)
-        self.model, self.tokenizer = self.model_loader.load_model()
+        self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
         
         # Initialize optimizer and scheduler
-        self.optimizer = AdamW(self.model.parameters(), lr=learning_rate)
+        # Use different learning rates for base model and classifier
+        self.optimizer = AdamW([
+            {'params': self.model.base_model.parameters(), 'lr': learning_rate},
+            {'params': self.model.classifier.parameters(), 'lr': learning_rate * 10}
+        ])
         
         self.scheduler = get_scheduler(
             "cosine",
@@ -55,16 +61,10 @@ class ExamTrainer:
             num_training_steps=num_epochs
         )
 
-    def train(self, checkpoint_path: Optional[str] = None) -> None:
+    def train(self) -> None:
         """
         Train the model.
-        
-        Args:
-            checkpoint_path (Optional[str]): Path to a checkpoint to resume training from
         """
-        if checkpoint_path:
-            self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
-        
         # Get data loaders
         train_loader, val_loader, _ = self.data_loader.get_all_splits(self.tokenizer)
         
@@ -94,14 +94,14 @@ class ExamTrainer:
                 )
                 
                 # Get probabilities from the combined model
-                probabilities = outputs.probabilities[0]
+                probabilities = outputs.probabilities
                 
                 # Calculate loss and accuracy
-                loss = F.cross_entropy(probabilities.unsqueeze(0), labels)
+                loss = F.cross_entropy(probabilities, labels)
                 total_train_loss += loss.item()
                 
                 # Calculate accuracy
-                predictions = torch.argmax(probabilities, dim=0)
+                predictions = torch.argmax(probabilities, dim=1)
                 correct_train += (predictions == labels).sum().item()
                 total_train += labels.size(0)
                 
@@ -140,11 +140,11 @@ class ExamTrainer:
                         output_hidden_states=True
                     )
                     
-                    probabilities = outputs.probabilities[0]
-                    loss = F.cross_entropy(probabilities.unsqueeze(0), labels)
+                    probabilities = outputs.probabilities
+                    loss = F.cross_entropy(probabilities, labels)
                     total_val_loss += loss.item()
                     
-                    predictions = torch.argmax(probabilities, dim=0)
+                    predictions = torch.argmax(probabilities, dim=1)
                     correct_val += (predictions == labels).sum().item()
                     total_val += labels.size(0)
             

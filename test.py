@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from typing import Dict, List
+from typing import Dict, List, Optional
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from model_loader import ModelLoader
 from data_loader import ExamDataLoader
@@ -12,6 +12,7 @@ class ExamEvaluator:
         self,
         model_type: str,
         batch_size: int = 8,
+        checkpoint_path: Optional[str] = None,
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
     ):
         """
@@ -20,6 +21,7 @@ class ExamEvaluator:
         Args:
             model_type (str): Type of model to use ("gemma-it" or "gemma-pt")
             batch_size (int): Batch size for evaluation
+            checkpoint_path (Optional[str]): Path to a checkpoint to evaluate
             device (str): Device to evaluate on ("cuda" or "cpu")
         """
         self.model_type = model_type
@@ -29,24 +31,18 @@ class ExamEvaluator:
         # Initialize model and data loaders
         self.model_loader = ModelLoader(model_type, device)
         self.data_loader = ExamDataLoader(batch_size=batch_size)
-        self.model, self.tokenizer = self.model_loader.load_model()
+        self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
         
         # Answer mapping for converting numeric predictions back to letters
         self.idx_to_answer = IDX_TO_ANSWER
 
-    def evaluate(self, checkpoint_path: str = None) -> Dict:
+    def evaluate(self) -> Dict:
         """
         Evaluate the model on the test dataset.
         
-        Args:
-            checkpoint_path (str): Path to a checkpoint to evaluate
-            
         Returns:
             Dict: Dictionary containing evaluation metrics
         """
-        if checkpoint_path:
-            self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
-        
         # Get test dataloader
         _, _, test_loader = self.data_loader.get_all_splits(self.tokenizer)
         
@@ -76,14 +72,14 @@ class ExamEvaluator:
                 )
                 
                 # Get probabilities from the combined model
-                probabilities = outputs.probabilities[0]
+                probabilities = outputs.probabilities
                 
                 # Calculate loss
-                loss = F.cross_entropy(probabilities.unsqueeze(0), labels)
+                loss = F.cross_entropy(probabilities, labels)
                 total_loss += loss.item()
                 
                 # Get predictions
-                predictions = torch.argmax(probabilities, dim=0)
+                predictions = torch.argmax(probabilities, dim=1)
                 
                 # Store predictions and labels
                 all_predictions.extend(predictions.cpu().numpy())
