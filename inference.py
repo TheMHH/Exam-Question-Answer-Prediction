@@ -110,33 +110,25 @@ class ExamInferencer:
         
         self.model.eval()
         with torch.no_grad():
-            try:
-                # Get model outputs
-                outputs = self.model(
-                    **inputs,
-                    images=image,
-                    output_hidden_states=True
-                )
-                
-                # Get probabilities from the combined model
-                probabilities = outputs.probabilities[0]
-                
-                # Get predicted answer
-                pred_idx = torch.argmax(probabilities).item()
-                predicted_answer = self.idx_to_answer[pred_idx]
-                
-                # Get confidence scores for all options
-                confidence_scores = {
-                    answer: float(probabilities[idx].item())
-                    for idx, answer in self.idx_to_answer.items()
-                }
-                
-            except Exception as e:
-                return {
-                    'error': f"Inference error: {str(e)}",
-                    'predicted_answer': None,
-                    'confidence_scores': None
-                }
+            # Get model outputs
+            outputs = self.model(
+                **inputs,
+                images=image,
+                output_hidden_states=True
+            )
+            
+            # Get probabilities from the combined model
+            probabilities = outputs.probabilities[0]
+            
+            # Get predicted answer
+            pred_idx = torch.argmax(probabilities).item()
+            predicted_answer = self.idx_to_answer[pred_idx]
+            
+            # Get confidence scores for all options
+            confidence_scores = {
+                answer: float(probabilities[idx].item())
+                for idx, answer in self.idx_to_answer.items()
+            }
         
         return {
             'predicted_answer': predicted_answer,
