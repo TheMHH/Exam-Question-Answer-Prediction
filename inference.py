@@ -42,10 +42,16 @@ class ExamInferencer:
         # Add classification head with matching dtype
         hidden_size = self.model.config.hidden_size
         self.classifier = nn.Sequential(
+            nn.LayerNorm(hidden_size),
             nn.Linear(hidden_size, hidden_size // 2),
-            nn.ReLU(),
+            nn.LayerNorm(hidden_size // 2),
+            nn.GELU(),
             nn.Dropout(0.1),
-            nn.Linear(hidden_size // 2, len(IDX_TO_ANSWER))
+            nn.Linear(hidden_size // 2, hidden_size // 4),
+            nn.LayerNorm(hidden_size // 4),
+            nn.GELU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_size // 4, len(IDX_TO_ANSWER))
         ).to(device, dtype=self.model_dtype)
         
         # Initialize weights
@@ -118,10 +124,16 @@ class ExamInferencer:
             # Recreate classifier after loading checkpoint with matching dtype
             hidden_size = self.model.config.hidden_size
             self.classifier = nn.Sequential(
+                nn.LayerNorm(hidden_size),
                 nn.Linear(hidden_size, hidden_size // 2),
-                nn.ReLU(),
+                nn.LayerNorm(hidden_size // 2),
+                nn.GELU(),
                 nn.Dropout(0.1),
-                nn.Linear(hidden_size // 2, len(IDX_TO_ANSWER))
+                nn.Linear(hidden_size // 2, hidden_size // 4),
+                nn.LayerNorm(hidden_size // 4),
+                nn.GELU(),
+                nn.Dropout(0.1),
+                nn.Linear(hidden_size // 4, len(IDX_TO_ANSWER))
             ).to(self.device, dtype=self.model_dtype)
             
             # Initialize weights
@@ -187,9 +199,10 @@ class ExamInferencer:
                             logger.warning(f"NaN found in hidden state {i}")
                             logger.warning(f"Hidden state {i} stats - min: {hidden_state.min().item():.4f}, max: {hidden_state.max().item():.4f}, mean: {hidden_state.mean().item():.4f}, std: {hidden_state.std().item():.4f}")
                 
-                # Get hidden states from the last layer
-                hidden_states = outputs.hidden_states[-1]  # Get last layer's hidden states
-                logger.info(f"Last hidden state shape: {hidden_states.shape}")
+                # Use an earlier layer's hidden states (before NaN propagation)
+                # We'll use layer 6 since NaN starts at layer 7
+                hidden_states = outputs.hidden_states[6]  # Get hidden states from layer 6
+                logger.info(f"Selected hidden state shape: {hidden_states.shape}")
                 
                 # Use the last token's representation for classification
                 last_hidden_state = hidden_states[:, -1, :]
@@ -217,7 +230,7 @@ class ExamInferencer:
                 logger.info(f"Logits stats - min: {logits.min().item():.4f}, max: {logits.max().item():.4f}, mean: {logits.mean().item():.4f}, std: {logits.std().item():.4f}")
                 
                 # Apply temperature scaling to control confidence
-                temperature = 1.0
+                temperature = 0.5  # Lower temperature for more confident predictions
                 scaled_logits = logits / temperature
                 logger.info(f"Scaled logits: {scaled_logits}")
                 
