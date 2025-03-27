@@ -21,7 +21,6 @@ class ModelLoader:
         self.model_type = model_type
         self.device = device
         
-        # Model configurations
         self.model_configs = {
             "gemma-it": {
                 "name": "google/gemma-2b-it",
@@ -40,7 +39,6 @@ class ModelLoader:
         
         self.config = self.model_configs[model_type]
         
-        # Create classifier architecture
         self.classifier = nn.Sequential(
             nn.LayerNorm(self.config["hidden_size"]),
             nn.Linear(self.config["hidden_size"], self.config["hidden_size"] // 2),
@@ -64,20 +62,16 @@ class ModelLoader:
         Returns:
             nn.Module: Combined model
         """
-        # Get model dtype
         model_dtype = next(base_model.parameters()).dtype
         
-        # Move classifier to device with matching dtype
         classifier = self.classifier.to(self.device, dtype=model_dtype)
         
-        # Initialize classifier weights
         for m in classifier.modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_normal_(m.weight)
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
         
-        # Combine model and classifier
         class CombinedModel(nn.Module):
             def __init__(self, base_model, classifier):
                 super().__init__()
@@ -130,33 +124,30 @@ class ModelLoader:
         Returns:
             Tuple[nn.Module, nn.Module]: Model and tokenizer
         """
-        # Load tokenizer
         tokenizer = AutoTokenizer.from_pretrained(
             self.config["name"],
             trust_remote_code=True
         )
         
         if checkpoint_path:
-            # Load from checkpoint
             base_model = AutoModelForCausalLM.from_pretrained(
                 checkpoint_path,
                 device_map="auto",
                 trust_remote_code=True,
                 torch_dtype=torch.float16
             )
-        else:
-            # Load base model
-            base_model = AutoModelForCausalLM.from_pretrained(
-                self.config["name"],
-                device_map="auto",
-                trust_remote_code=True,
-                torch_dtype=torch.float16
-            )
+            base_model = base_model.to(self.device)
+            return base_model, tokenizer
+
+        base_model = AutoModelForCausalLM.from_pretrained(
+            self.config["name"],
+            device_map="auto",
+            trust_remote_code=True,
+            torch_dtype=torch.float16
+        )
         
-        # Move model to device
         base_model = base_model.to(self.device)
         
-        # Create combined model
         combined_model = self._create_combined_model(base_model)
         
         return combined_model, tokenizer
