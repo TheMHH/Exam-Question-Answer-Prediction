@@ -146,7 +146,14 @@ class ExamInferencer:
             
             # Get logits and probabilities using our classifier
             logits = self.classifier(last_hidden_state)
-            probabilities = F.softmax(logits, dim=1)[0]
+            
+            # Apply temperature scaling to control confidence
+            temperature = 1.0
+            scaled_logits = logits / temperature
+            
+            # Use log_softmax for better numerical stability
+            log_probs = F.log_softmax(scaled_logits, dim=1)
+            probabilities = torch.exp(log_probs)[0]
             
             # Get predicted answer
             pred_idx = torch.argmax(probabilities).item()
@@ -154,7 +161,7 @@ class ExamInferencer:
             
             # Get confidence scores for all options
             confidence_scores = {
-                answer: probabilities[idx].item()
+                answer: float(probabilities[idx].item())  # Convert to float to avoid any dtype issues
                 for idx, answer in self.idx_to_answer.items()
             }
         
