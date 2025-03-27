@@ -8,12 +8,7 @@ import requests
 from io import BytesIO
 import os
 from constants import EXAM_QUESTION_PROMPT, IDX_TO_ANSWER
-import logging
 import torch.nn as nn
-
-# Set up logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 class ExamInferencer:
     def __init__(
@@ -37,7 +32,6 @@ class ExamInferencer:
         
         # Get model dtype
         self.model_dtype = next(self.model.parameters()).dtype
-        logger.info(f"Model dtype: {self.model_dtype}")
         
         # Add classification head with matching dtype
         hidden_size = self.model.config.hidden_size
@@ -143,13 +137,9 @@ class ExamInferencer:
                     if m.bias is not None:
                         nn.init.zeros_(m.bias)
         
-        # Load and preprocess image
         try:
             pil_image = self.load_image(image_source)
-            # Convert PIL Image to tensor and add batch dimension
             image = self.image_transform(pil_image).unsqueeze(0)
-            logger.info(f"Image tensor shape: {image.shape}, dtype: {image.dtype}")
-            logger.info(f"Image stats - min: {image.min().item():.4f}, max: {image.max().item():.4f}, mean: {image.mean().item():.4f}, std: {image.std().item():.4f}")
         except Exception as e:
             return {
                 'error': str(e),
@@ -157,7 +147,6 @@ class ExamInferencer:
                 'confidence_scores': None
             }
         
-        # Prepare inputs
         inputs = self.tokenizer(
             EXAM_QUESTION_PROMPT,
             return_tensors="pt",
@@ -165,100 +154,59 @@ class ExamInferencer:
             padding=True,
             truncation=True
         )
-        logger.info(f"Input shapes: {[(k, v.shape) for k, v in inputs.items()]}")
         
-        # Move inputs and image to device with correct dtypes
-        # Keep input_ids as long integers, convert other inputs to model dtype
         inputs = {
             k: v.to(self.device, dtype=self.model_dtype if k != 'input_ids' else torch.long)
             for k, v in inputs.items()
         }
         image = image.to(self.device, dtype=self.model_dtype)
         
-        # Generate prediction
         self.model.eval()
         with torch.no_grad():
-            try:
-                # Get model outputs
-                outputs = self.model(
-                    **inputs,
-                    images=image,
-                    output_hidden_states=True,  # Request hidden states
-                    return_dict=True  # Ensure we get a dictionary output
-                )
-                
-                # Log model outputs
-                logger.info(f"Model outputs keys: {outputs.keys()}")
-                if hasattr(outputs, 'hidden_states'):
-                    logger.info(f"Number of hidden states: {len(outputs.hidden_states)}")
-                    logger.info(f"Hidden states shapes: {[h.shape for h in outputs.hidden_states]}")
-                    
-                    # Check for NaN in hidden states
-                    for i, hidden_state in enumerate(outputs.hidden_states):
-                        if torch.isnan(hidden_state).any():
-                            logger.warning(f"NaN found in hidden state {i}")
-                            logger.warning(f"Hidden state {i} stats - min: {hidden_state.min().item():.4f}, max: {hidden_state.max().item():.4f}, mean: {hidden_state.mean().item():.4f}, std: {hidden_state.std().item():.4f}")
-                
-                # Use an earlier layer's hidden states (before NaN propagation)
-                # We'll use layer 6 since NaN starts at layer 7
-                hidden_states = outputs.hidden_states[6]  # Get hidden states from layer 6
-                logger.info(f"Selected hidden state shape: {hidden_states.shape}")
-                
-                # Use the last token's representation for classification
-                last_hidden_state = hidden_states[:, -1, :]
-                logger.info(f"Last token hidden state shape: {last_hidden_state.shape}")
-                
-                # Check for NaN in last hidden state
-                if torch.isnan(last_hidden_state).any():
-                    logger.warning("NaN found in last hidden state")
-                    # Try to handle NaN values
-                    last_hidden_state = torch.nan_to_num(last_hidden_state, nan=0.0)
-                
-                logger.info(f"Last token hidden state stats - min: {last_hidden_state.min().item():.4f}, max: {last_hidden_state.max().item():.4f}, mean: {last_hidden_state.mean().item():.4f}, std: {last_hidden_state.std().item():.4f}")
-                
-                # Get logits and probabilities using our classifier
-                logits = self.classifier(last_hidden_state)
-                logger.info(f"Logits shape: {logits.shape}")
-                logger.info(f"Logits values: {logits}")
-                
-                # Check for NaN in logits
-                if torch.isnan(logits).any():
-                    logger.warning("NaN found in logits")
-                    # Try to handle NaN values
-                    logits = torch.nan_to_num(logits, nan=0.0)
-                
-                logger.info(f"Logits stats - min: {logits.min().item():.4f}, max: {logits.max().item():.4f}, mean: {logits.mean().item():.4f}, std: {logits.std().item():.4f}")
-                
-                # Apply temperature scaling to control confidence
-                temperature = 0.5  # Lower temperature for more confident predictions
-                scaled_logits = logits / temperature
-                logger.info(f"Scaled logits: {scaled_logits}")
-                
-                # Use log_softmax for better numerical stability
-                log_probs = F.log_softmax(scaled_logits, dim=1)
-                logger.info(f"Log probabilities: {log_probs}")
-                
-                probabilities = torch.exp(log_probs)[0]
-                logger.info(f"Probabilities: {probabilities}")
-                
-                # Get predicted answer
-                pred_idx = torch.argmax(probabilities).item()
-                predicted_answer = self.idx_to_answer[pred_idx]
-                
-                # Get confidence scores for all options
-                confidence_scores = {
-                    answer: float(probabilities[idx].item())  # Convert to float to avoid any dtype issues
-                    for idx, answer in self.idx_to_answer.items()
-                }
-                logger.info(f"Confidence scores: {confidence_scores}")
-                
-            except Exception as e:
-                logger.error(f"Error during inference: {str(e)}")
-                return {
-                    'error': f"Inference error: {str(e)}",
-                    'predicted_answer': None,
-                    'confidence_scores': None
-                }
+            outputs = self.model(
+                **inputs,
+                images=image,
+                output_hidden_states=True,  # Request hidden states
+                return_dict=True
+            )
+            
+            # Use an earlier layer's hidden states (before NaN propagation)
+            # We'll use layer 6 since NaN starts at layer 7
+            hidden_states = outputs.hidden_states[6]  # Get hidden states from layer 6
+            
+            # Use the last token's representation for classification
+            last_hidden_state = hidden_states[:, -1, :]
+            
+            # Check for NaN in last hidden state
+            if torch.isnan(last_hidden_state).any():
+                # Try to handle NaN values
+                last_hidden_state = torch.nan_to_num(last_hidden_state, nan=0.0)
+            
+            # Get logits and probabilities using our classifier
+            logits = self.classifier(last_hidden_state)
+            
+            # Check for NaN in logits
+            if torch.isnan(logits).any():
+                # Try to handle NaN values
+                logits = torch.nan_to_num(logits, nan=0.0)
+            
+            # Apply temperature scaling to control confidence
+            temperature = 0.5  # Lower temperature for more confident predictions
+            scaled_logits = logits / temperature
+            
+            # Use log_softmax for better numerical stability
+            log_probs = F.log_softmax(scaled_logits, dim=1)
+            probabilities = torch.exp(log_probs)[0]
+            
+            # Get predicted answer
+            pred_idx = torch.argmax(probabilities).item()
+            predicted_answer = self.idx_to_answer[pred_idx]
+            
+            # Get confidence scores for all options
+            confidence_scores = {
+                answer: float(probabilities[idx].item())  # Convert to float to avoid any dtype issues
+                for idx, answer in self.idx_to_answer.items()
+            }
         
         return {
             'predicted_answer': predicted_answer,
@@ -281,10 +229,8 @@ def main():
     
     args = parser.parse_args()
     
-    # Initialize inferencer
     inferencer = ExamInferencer(args.model)
     
-    # Predict answer
     result = inferencer.predict_answer(
         args.image,
         checkpoint_path=args.checkpoint
