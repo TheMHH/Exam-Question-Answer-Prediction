@@ -9,6 +9,7 @@ from io import BytesIO
 import os
 from constants import EXAM_QUESTION_PROMPT, IDX_TO_ANSWER
 import logging
+import torch.nn as nn
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -40,7 +41,19 @@ class ExamInferencer:
         
         # Add classification head with matching dtype
         hidden_size = self.model.config.hidden_size
-        self.classifier = torch.nn.Linear(hidden_size, len(IDX_TO_ANSWER)).to(device, dtype=self.model_dtype)
+        self.classifier = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(hidden_size // 2, len(IDX_TO_ANSWER))
+        ).to(device, dtype=self.model_dtype)
+        
+        # Initialize weights
+        for m in self.classifier.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.xavier_normal_(m.weight)
+                if m.bias is not None:
+                    nn.init.zeros_(m.bias)
         
         # Answer mapping
         self.idx_to_answer = IDX_TO_ANSWER
@@ -104,7 +117,19 @@ class ExamInferencer:
             self.model_dtype = next(self.model.parameters()).dtype
             # Recreate classifier after loading checkpoint with matching dtype
             hidden_size = self.model.config.hidden_size
-            self.classifier = torch.nn.Linear(hidden_size, len(IDX_TO_ANSWER)).to(self.device, dtype=self.model_dtype)
+            self.classifier = nn.Sequential(
+                nn.Linear(hidden_size, hidden_size // 2),
+                nn.ReLU(),
+                nn.Dropout(0.1),
+                nn.Linear(hidden_size // 2, len(IDX_TO_ANSWER))
+            ).to(self.device, dtype=self.model_dtype)
+            
+            # Initialize weights
+            for m in self.classifier.modules():
+                if isinstance(m, nn.Linear):
+                    nn.init.xavier_normal_(m.weight)
+                    if m.bias is not None:
+                        nn.init.zeros_(m.bias)
         
         # Load and preprocess image
         try:
@@ -160,11 +185,13 @@ class ExamInferencer:
             # Use the last token's representation for classification
             last_hidden_state = hidden_states[:, -1, :]
             logger.info(f"Last token hidden state shape: {last_hidden_state.shape}")
+            logger.info(f"Last token hidden state stats - min: {last_hidden_state.min().item():.4f}, max: {last_hidden_state.max().item():.4f}, mean: {last_hidden_state.mean().item():.4f}, std: {last_hidden_state.std().item():.4f}")
             
             # Get logits and probabilities using our classifier
             logits = self.classifier(last_hidden_state)
             logger.info(f"Logits shape: {logits.shape}")
             logger.info(f"Logits values: {logits}")
+            logger.info(f"Logits stats - min: {logits.min().item():.4f}, max: {logits.max().item():.4f}, mean: {logits.mean().item():.4f}, std: {logits.std().item():.4f}")
             
             # Apply temperature scaling to control confidence
             temperature = 1.0
