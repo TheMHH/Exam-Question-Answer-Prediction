@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from typing import Dict, List, Optional, Tuple
 import os
+from constants import EXAM_QUESTION_PROMPT, ANSWER_TO_IDX
 
 class ImageTextDataset(Dataset):
     def __init__(self, dataset: Dict, tokenizer, max_length: int = 512):
@@ -18,11 +19,7 @@ class ImageTextDataset(Dataset):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.max_length = max_length
-        
-        # Create answer mapping
-        self.answer_mapping = {
-            'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4
-        }
+        self.answer_mapping = ANSWER_TO_IDX
 
     def __len__(self) -> int:
         return len(self.dataset)
@@ -45,12 +42,9 @@ class ImageTextDataset(Dataset):
         # Convert answer key to numeric label
         label = self.answer_mapping[item['answer_key']]
         
-        # Create input prompt
-        prompt = "Look at this exam question image and select the correct answer choice (A, B, C, D, or E):"
-        
         # Tokenize prompt
         encoding = self.tokenizer(
-            prompt,
+            EXAM_QUESTION_PROMPT,
             max_length=self.max_length,
             padding='max_length',
             truncation=True,

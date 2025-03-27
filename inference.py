@@ -6,6 +6,7 @@ from model_loader import ModelLoader
 import requests
 from io import BytesIO
 import os
+from constants import EXAM_QUESTION_PROMPT, IDX_TO_ANSWER
 
 class ExamInferencer:
     def __init__(
@@ -28,9 +29,7 @@ class ExamInferencer:
         self.model, self.tokenizer = self.model_loader.load_model()
         
         # Answer mapping
-        self.idx_to_answer = {
-            0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E'
-        }
+        self.idx_to_answer = IDX_TO_ANSWER
 
     def load_image(self, image_source: str) -> Image.Image:
         """
@@ -88,12 +87,9 @@ class ExamInferencer:
                 'confidence_scores': None
             }
         
-        # Create input prompt
-        prompt = "Look at this exam question image and select the correct answer choice (A, B, C, D, or E):"
-        
         # Prepare inputs
         inputs = self.tokenizer(
-            prompt,
+            EXAM_QUESTION_PROMPT,
             return_tensors="pt",
             max_length=512,
             padding=True,
