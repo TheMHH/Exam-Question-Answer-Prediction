@@ -196,13 +196,11 @@ class ExamInferencer:
             log_probs = F.log_softmax(scaled_logits, dim=1)
             probabilities = torch.exp(log_probs)[0]
             
-            # Get predicted answer
             pred_idx = torch.argmax(probabilities).item()
             predicted_answer = self.idx_to_answer[pred_idx]
             
-            # Get confidence scores for all options
             confidence_scores = {
-                answer: float(probabilities[idx].item())  # Convert to float to avoid any dtype issues
+                answer: float(probabilities[idx].item())
                 for idx, answer in self.idx_to_answer.items()
             }
         
