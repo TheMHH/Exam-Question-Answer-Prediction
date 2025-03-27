@@ -1,5 +1,9 @@
 # Model prompts
-EXAM_QUESTION_PROMPT = "Look at this exam question image and select the correct answer choice (A, B, C, D, or E):"
+EXAM_QUESTION_PROMPT = """Let's analyze this exam question step by step:
+1. First, carefully read the question text and understand what is being asked
+2. Look at each option (A, B, C, D, E) and understand what they mean
+3. Think about which option best answers the question
+4. Select the correct answer choice (A, B, C, D, or E)"""
 
 # Answer mappings
 ANSWER_TO_IDX = {
