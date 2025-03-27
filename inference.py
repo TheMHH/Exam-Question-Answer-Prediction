@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
 from PIL import Image
+import torchvision.transforms as transforms
 from typing import Optional, Dict, Union
 from model_loader import ModelLoader
 import requests
@@ -30,6 +31,16 @@ class ExamInferencer:
         
         # Answer mapping
         self.idx_to_answer = IDX_TO_ANSWER
+        
+        # Image preprocessing
+        self.image_transform = transforms.Compose([
+            transforms.Resize((224, 224)),  # Resize to common size
+            transforms.ToTensor(),          # Convert to tensor
+            transforms.Normalize(            # Normalize for model
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225]
+            )
+        ])
 
     def load_image(self, image_source: str) -> Image.Image:
         """
@@ -79,7 +90,9 @@ class ExamInferencer:
         
         # Load and preprocess image
         try:
-            image = self.load_image(image_source)
+            pil_image = self.load_image(image_source)
+            # Convert PIL Image to tensor and add batch dimension
+            image = self.image_transform(pil_image).unsqueeze(0)
         except Exception as e:
             return {
                 'error': str(e),
@@ -96,7 +109,7 @@ class ExamInferencer:
             truncation=True
         )
         
-        # Move inputs to device
+        # Move inputs and image to device
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         image = image.to(self.device)
         
