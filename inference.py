@@ -8,6 +8,11 @@ import requests
 from io import BytesIO
 import os
 from constants import EXAM_QUESTION_PROMPT, IDX_TO_ANSWER
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class ExamInferencer:
     def __init__(
@@ -31,6 +36,7 @@ class ExamInferencer:
         
         # Get model dtype
         self.model_dtype = next(self.model.parameters()).dtype
+        logger.info(f"Model dtype: {self.model_dtype}")
         
         # Add classification head with matching dtype
         hidden_size = self.model.config.hidden_size
@@ -105,6 +111,7 @@ class ExamInferencer:
             pil_image = self.load_image(image_source)
             # Convert PIL Image to tensor and add batch dimension
             image = self.image_transform(pil_image).unsqueeze(0)
+            logger.info(f"Image tensor shape: {image.shape}, dtype: {image.dtype}")
         except Exception as e:
             return {
                 'error': str(e),
@@ -120,6 +127,7 @@ class ExamInferencer:
             padding=True,
             truncation=True
         )
+        logger.info(f"Input shapes: {[(k, v.shape) for k, v in inputs.items()]}")
         
         # Move inputs and image to device with correct dtypes
         # Keep input_ids as long integers, convert other inputs to model dtype
@@ -139,21 +147,36 @@ class ExamInferencer:
                 output_hidden_states=True  # Request hidden states
             )
             
+            # Log model outputs
+            logger.info(f"Model outputs keys: {outputs.keys()}")
+            if hasattr(outputs, 'hidden_states'):
+                logger.info(f"Number of hidden states: {len(outputs.hidden_states)}")
+                logger.info(f"Hidden states shapes: {[h.shape for h in outputs.hidden_states]}")
+            
             # Get hidden states from the last layer
             hidden_states = outputs.hidden_states[-1]  # Get last layer's hidden states
+            logger.info(f"Last hidden state shape: {hidden_states.shape}")
+            
             # Use the last token's representation for classification
             last_hidden_state = hidden_states[:, -1, :]
+            logger.info(f"Last token hidden state shape: {last_hidden_state.shape}")
             
             # Get logits and probabilities using our classifier
             logits = self.classifier(last_hidden_state)
+            logger.info(f"Logits shape: {logits.shape}")
+            logger.info(f"Logits values: {logits}")
             
             # Apply temperature scaling to control confidence
             temperature = 1.0
             scaled_logits = logits / temperature
+            logger.info(f"Scaled logits: {scaled_logits}")
             
             # Use log_softmax for better numerical stability
             log_probs = F.log_softmax(scaled_logits, dim=1)
+            logger.info(f"Log probabilities: {log_probs}")
+            
             probabilities = torch.exp(log_probs)[0]
+            logger.info(f"Probabilities: {probabilities}")
             
             # Get predicted answer
             pred_idx = torch.argmax(probabilities).item()
@@ -164,6 +187,7 @@ class ExamInferencer:
                 answer: float(probabilities[idx].item())  # Convert to float to avoid any dtype issues
                 for idx, answer in self.idx_to_answer.items()
             }
+            logger.info(f"Confidence scores: {confidence_scores}")
         
         return {
             'predicted_answer': predicted_answer,
