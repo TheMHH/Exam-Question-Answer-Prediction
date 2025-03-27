@@ -123,14 +123,20 @@ class ExamInferencer:
         # Generate prediction
         self.model.eval()
         with torch.no_grad():
+            # Get model outputs
             outputs = self.model(
                 **inputs,
-                images=image
+                images=image,
+                output_hidden_states=True  # Request hidden states
             )
             
+            # Get hidden states from the last layer
+            hidden_states = outputs.hidden_states[-1]  # Get last layer's hidden states
+            # Use the last token's representation for classification
+            last_hidden_state = hidden_states[:, -1, :]
+            
             # Get logits and probabilities using our classifier
-            hidden_states = outputs.last_hidden_state[:, 0, :]  # Get [CLS] token representation
-            logits = self.classifier(hidden_states)
+            logits = self.classifier(last_hidden_state)
             probabilities = F.softmax(logits, dim=1)[0]
             
             # Get predicted answer
