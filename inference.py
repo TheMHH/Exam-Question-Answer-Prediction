@@ -25,14 +25,12 @@ class ExamInferencer:
         self.model_type = model_type
         self.device = device
         
-        # Initialize model loader
         self.model_loader = ModelLoader(model_type, device)
         self.model, self.tokenizer = self.model_loader.load_model()
         
         # Answer mapping
         self.idx_to_answer = IDX_TO_ANSWER
         
-        # Image preprocessing
         self.image_transform = transforms.Compose([
             transforms.Resize((224, 224)),  # Resize to common size
             transforms.ToTensor(),          # Convert to tensor
@@ -104,27 +102,22 @@ class ExamInferencer:
             truncation=True
         )
         
-        # Move inputs and image to device
         inputs = {k: v.to(self.device) for k, v in inputs.items()}
         image = image.to(self.device)
         
         self.model.eval()
         with torch.no_grad():
-            # Get model outputs
             outputs = self.model(
                 **inputs,
                 images=image,
                 output_hidden_states=True
             )
             
-            # Get probabilities from the combined model
             probabilities = outputs.probabilities[0]
             
-            # Get predicted answer
             pred_idx = torch.argmax(probabilities).item()
             predicted_answer = self.idx_to_answer[pred_idx]
             
-            # Get confidence scores for all options
             confidence_scores = {
                 answer: float(probabilities[idx].item())
                 for idx, answer in self.idx_to_answer.items()
