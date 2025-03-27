@@ -8,7 +8,6 @@ import requests
 from io import BytesIO
 import os
 from constants import EXAM_QUESTION_PROMPT, IDX_TO_ANSWER
-import torch.nn as nn
 
 class ExamInferencer:
     def __init__(
@@ -29,31 +28,6 @@ class ExamInferencer:
         # Initialize model loader
         self.model_loader = ModelLoader(model_type, device)
         self.model, self.tokenizer = self.model_loader.load_model()
-        
-        # Get model dtype
-        self.model_dtype = next(self.model.parameters()).dtype
-        
-        # Add classification head with matching dtype
-        hidden_size = self.model.config.hidden_size
-        self.classifier = nn.Sequential(
-            nn.LayerNorm(hidden_size),
-            nn.Linear(hidden_size, hidden_size // 2),
-            nn.LayerNorm(hidden_size // 2),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(hidden_size // 2, hidden_size // 4),
-            nn.LayerNorm(hidden_size // 4),
-            nn.GELU(),
-            nn.Dropout(0.1),
-            nn.Linear(hidden_size // 4, len(IDX_TO_ANSWER))
-        ).to(device, dtype=self.model_dtype)
-        
-        # Initialize weights
-        for m in self.classifier.modules():
-            if isinstance(m, nn.Linear):
-                nn.init.xavier_normal_(m.weight)
-                if m.bias is not None:
-                    nn.init.zeros_(m.bias)
         
         # Answer mapping
         self.idx_to_answer = IDX_TO_ANSWER
@@ -111,29 +85,6 @@ class ExamInferencer:
         """
         if checkpoint_path:
             self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
-            # Get model dtype
-            self.model_dtype = next(self.model.parameters()).dtype
-            # Recreate classifier after loading checkpoint with matching dtype
-            hidden_size = self.model.config.hidden_size
-            self.classifier = nn.Sequential(
-                nn.LayerNorm(hidden_size),
-                nn.Linear(hidden_size, hidden_size // 2),
-                nn.LayerNorm(hidden_size // 2),
-                nn.GELU(),
-                nn.Dropout(0.1),
-                nn.Linear(hidden_size // 2, hidden_size // 4),
-                nn.LayerNorm(hidden_size // 4),
-                nn.GELU(),
-                nn.Dropout(0.1),
-                nn.Linear(hidden_size // 4, len(IDX_TO_ANSWER))
-            ).to(self.device, dtype=self.model_dtype)
-            
-            # Initialize weights
-            for m in self.classifier.modules():
-                if isinstance(m, nn.Linear):
-                    nn.init.xavier_normal_(m.weight)
-                    if m.bias is not None:
-                        nn.init.zeros_(m.bias)
         
         try:
             pil_image = self.load_image(image_source)
@@ -153,56 +104,39 @@ class ExamInferencer:
             truncation=True
         )
         
-        inputs = {
-            k: v.to(self.device, dtype=self.model_dtype if k != 'input_ids' else torch.long)
-            for k, v in inputs.items()
-        }
-        image = image.to(self.device, dtype=self.model_dtype)
+        # Move inputs and image to device
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        image = image.to(self.device)
         
         self.model.eval()
         with torch.no_grad():
-            outputs = self.model(
-                **inputs,
-                images=image,
-                output_hidden_states=True,  # Request hidden states
-                return_dict=True
-            )
-            
-            # Use an earlier layer's hidden states (before NaN propagation)
-            # We'll use layer 6 since NaN starts at layer 7
-            hidden_states = outputs.hidden_states[6]  # Get hidden states from layer 6
-            
-            # Use the last token's representation for classification
-            last_hidden_state = hidden_states[:, -1, :]
-            
-            # Check for NaN in last hidden state
-            if torch.isnan(last_hidden_state).any():
-                # Try to handle NaN values
-                last_hidden_state = torch.nan_to_num(last_hidden_state, nan=0.0)
-            
-            # Get logits and probabilities using our classifier
-            logits = self.classifier(last_hidden_state)
-            
-            # Check for NaN in logits
-            if torch.isnan(logits).any():
-                # Try to handle NaN values
-                logits = torch.nan_to_num(logits, nan=0.0)
-            
-            # Apply temperature scaling to control confidence
-            temperature = 0.5  # Lower temperature for more confident predictions
-            scaled_logits = logits / temperature
-            
-            # Use log_softmax for better numerical stability
-            log_probs = F.log_softmax(scaled_logits, dim=1)
-            probabilities = torch.exp(log_probs)[0]
-            
-            pred_idx = torch.argmax(probabilities).item()
-            predicted_answer = self.idx_to_answer[pred_idx]
-            
-            confidence_scores = {
-                answer: float(probabilities[idx].item())
-                for idx, answer in self.idx_to_answer.items()
-            }
+            try:
+                # Get model outputs
+                outputs = self.model(
+                    **inputs,
+                    images=image,
+                    output_hidden_states=True
+                )
+                
+                # Get probabilities from the combined model
+                probabilities = outputs.probabilities[0]
+                
+                # Get predicted answer
+                pred_idx = torch.argmax(probabilities).item()
+                predicted_answer = self.idx_to_answer[pred_idx]
+                
+                # Get confidence scores for all options
+                confidence_scores = {
+                    answer: float(probabilities[idx].item())
+                    for idx, answer in self.idx_to_answer.items()
+                }
+                
+            except Exception as e:
+                return {
+                    'error': f"Inference error: {str(e)}",
+                    'predicted_answer': None,
+                    'confidence_scores': None
+                }
         
         return {
             'predicted_answer': predicted_answer,

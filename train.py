@@ -45,18 +45,8 @@ class ExamTrainer:
         self.data_loader = ExamDataLoader(batch_size=batch_size)
         self.model, self.tokenizer = self.model_loader.load_model()
         
-        # Add classification head if needed
-        if not hasattr(self.model, 'classifier'):
-            self.model.classifier = torch.nn.Linear(
-                self.model.config.hidden_size, 
-                5  # Number of answer choices (A, B, C, D, E)
-            ).to(device)
-        
         # Initialize optimizer and scheduler
-        self.optimizer = AdamW([
-            {'params': self.model.parameters(), 'lr': learning_rate},
-            {'params': self.model.classifier.parameters(), 'lr': learning_rate * 10}
-        ])
+        self.optimizer = AdamW(self.model.parameters(), lr=learning_rate)
         
         self.scheduler = get_scheduler(
             "cosine",
@@ -99,18 +89,19 @@ class ExamTrainer:
                 outputs = self.model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    images=images
+                    images=images,
+                    output_hidden_states=True
                 )
                 
-                # Get logits from the last hidden state
-                logits = self.model.classifier(outputs.last_hidden_state[:, 0, :])
+                # Get probabilities from the combined model
+                probabilities = outputs.probabilities
                 
                 # Calculate loss and accuracy
-                loss = F.cross_entropy(logits, labels)
+                loss = F.cross_entropy(probabilities, labels)
                 total_train_loss += loss.item()
                 
                 # Calculate accuracy
-                predictions = torch.argmax(logits, dim=1)
+                predictions = torch.argmax(probabilities, dim=1)
                 correct_train += (predictions == labels).sum().item()
                 total_train += labels.size(0)
                 
@@ -145,14 +136,15 @@ class ExamTrainer:
                     outputs = self.model(
                         input_ids=input_ids,
                         attention_mask=attention_mask,
-                        images=images
+                        images=images,
+                        output_hidden_states=True
                     )
                     
-                    logits = self.model.classifier(outputs.last_hidden_state[:, 0, :])
-                    loss = F.cross_entropy(logits, labels)
+                    probabilities = outputs.probabilities
+                    loss = F.cross_entropy(probabilities, labels)
                     total_val_loss += loss.item()
                     
-                    predictions = torch.argmax(logits, dim=1)
+                    predictions = torch.argmax(probabilities, dim=1)
                     correct_val += (predictions == labels).sum().item()
                     total_val += labels.size(0)
             

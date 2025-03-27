@@ -5,6 +5,7 @@ from typing import Dict, List
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from model_loader import ModelLoader
 from data_loader import ExamDataLoader
+from constants import IDX_TO_ANSWER
 
 class ExamEvaluator:
     def __init__(
@@ -31,9 +32,7 @@ class ExamEvaluator:
         self.model, self.tokenizer = self.model_loader.load_model()
         
         # Answer mapping for converting numeric predictions back to letters
-        self.idx_to_answer = {
-            0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E'
-        }
+        self.idx_to_answer = IDX_TO_ANSWER
 
     def evaluate(self, checkpoint_path: str = None) -> Dict:
         """
@@ -72,16 +71,19 @@ class ExamEvaluator:
                 outputs = self.model(
                     input_ids=input_ids,
                     attention_mask=attention_mask,
-                    images=images
+                    images=images,
+                    output_hidden_states=True
                 )
                 
-                # Get logits and calculate loss
-                logits = self.model.classifier(outputs.last_hidden_state[:, 0, :])
-                loss = F.cross_entropy(logits, labels)
+                # Get probabilities from the combined model
+                probabilities = outputs.probabilities
+                
+                # Calculate loss
+                loss = F.cross_entropy(probabilities, labels)
                 total_loss += loss.item()
                 
                 # Get predictions
-                predictions = torch.argmax(logits, dim=1)
+                predictions = torch.argmax(probabilities, dim=1)
                 
                 # Store predictions and labels
                 all_predictions.extend(predictions.cpu().numpy())
