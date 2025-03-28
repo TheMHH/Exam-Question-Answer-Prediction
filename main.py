@@ -25,7 +25,6 @@ def main():
     os.makedirs("checkpoints", exist_ok=True)
     
     if args.mode == "train":
-        # Initialize trainer
         trainer = ExamTrainer(
             model_type=args.model,
             batch_size=args.batch_size,
@@ -34,31 +33,26 @@ def main():
             checkpoint_path=args.checkpoint
         )
         
-        # Train the model
         trainer.train()
 
     elif args.mode == "test":
-        # Initialize evaluator
         evaluator = ExamEvaluator(
             model_type=args.model,
             batch_size=args.batch_size,
             checkpoint_path=args.checkpoint
         )
         
-        # Evaluate the model
         evaluator.evaluate()
 
     elif args.mode == "infer":
         if not args.image:
             raise ValueError("--image argument is required for inference mode")
         
-        # Initialize inferencer
         inferencer = ExamInferencer(
             model_type=args.model,
             checkpoint_path=args.checkpoint
         )
         
-        # Predict answer for the exam question
         result = inferencer.predict_answer(args.image)
         
         print("\nPrediction Results:")
