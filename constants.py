@@ -1,10 +1,37 @@
 EXAM_QUESTION_PROMPT =  """Let's analyze this exam question step by step:
-1. First, carefully read the question text and understand what is being asked.
-2. Look at the image provided below and understand the context it provides.
-3. Look at each option (A, B, C, D, E) and understand what they mean.
-4. Think about which option best answers the question based on both the text and the image context.
-5. Select the correct answer choice (A, B, C, D, or E) based on the image and the question."""
+    1. Read the Question Carefully:
 
+        Identify key terms, concepts, and what is explicitly being asked.
+
+        Note any specific conditions or constraints mentioned.
+
+    2. Examine All Provided Visuals (Images, Tables, Graphs, Shapes, etc.):
+
+        If there's an image, analyze its components (labels, arrows, structures, etc.).
+
+        If there's a table, check rows, columns, and highlighted data for patterns or clues.
+
+        If there's a graph or diagram, interpret axes, trends, or relationships depicted.
+
+    3. Break Down Each Option (A, B, C, D, E):
+
+        Understand what each option represents.
+
+        Compare them against the question's requirements and visual context.
+
+        Eliminate clearly incorrect choices first.
+
+    4. Apply Logical Reasoning:
+
+        Relate the question to known concepts or formulas.
+
+        Cross-check visuals with textual information for consistency.
+
+    5. Select the Best Answer:
+
+        Choose the option that best fits both the question and the supporting visuals.
+
+        Justify why other options are incorrect (if possible)."""
 
 EXAM_QUESTION_CHAT_TEMPLATE = [
     {
