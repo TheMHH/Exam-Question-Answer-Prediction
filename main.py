@@ -58,7 +58,6 @@ def main():
             print(f"Error: {result['error']}")
         else:
             print("\nPrediction Results:")
-            print(f"Predicted Answer: {result['predicted_answer']}")
             print("Generated Text:")
             print(result['generated_text'])
 

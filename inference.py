@@ -36,7 +36,7 @@ class ExamInferencer:
                     raise FileNotFoundError(f"Image file not found: {image_source}")
                 image = Image.open(image_source)
             
-            return image.convert('RGB')
+            return image
         except requests.RequestException as e:
             raise ValueError(f"Error downloading image from URL: {e}")
         except Exception as e:
@@ -59,30 +59,14 @@ class ExamInferencer:
             images=pil_image,
             return_tensors="pt",
             max_length=512,
-            padding=True,
-            truncation=True
         ).to(self.device)
                 
         self.model.eval()
         with torch.no_grad():
-            # Add a custom logits processor to handle NaN/Inf values
-            def logits_processor(input_ids, scores):
-                # Replace any NaN or Inf values with a very negative number
-                scores = torch.where(torch.isnan(scores) | torch.isinf(scores), 
-                                    torch.tensor(-1e9, device=scores.device), 
-                                    scores)
-                # Ensure no negative probabilities after softmax
-                # (though softmax should handle this already)
-                return scores
-            
-            # Try with safer generation parameters
             generated_ids = self.model.generate(
                 input_ids=inputs.input_ids,
                 attention_mask=inputs.attention_mask,
-                max_new_tokens=64,  # Start smaller
-                do_sample=False,    # Greedy decoding is more stable
-                num_beams=1,        # Simple beam search
-                logits_processor=[logits_processor]  # Custom processor
+                max_new_tokens=250,
             )
             
             generated_text = self.processor.tokenizer.decode(
@@ -91,18 +75,9 @@ class ExamInferencer:
             )
             
             return {
-                'predicted_answer': self._extract_answer(generated_text),
                 'generated_text': generated_text,
                 'error': None
             }
-    
-    def _extract_answer(self, generated_text: str) -> str:
-        """Extract the final answer from the generated text."""
-        for answer in IDX_TO_ANSWER.values():
-            if answer.lower() in generated_text.lower():
-                return answer
-        return generated_text.split('.')[0].strip()
-
 
 def main():
     import argparse
