@@ -50,7 +50,6 @@ def main():
         
         inferencer = ExamInferencer(
             model_type=args.model,
-            checkpoint_path=args.checkpoint
         )
         
         result = inferencer.predict_answer(args.image)
