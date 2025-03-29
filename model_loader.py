@@ -1,8 +1,10 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoProcessor, AutoModelForCausalLM
 import torch
-from typing import Tuple, Optional
+from typing import Tuple
 import torch.nn as nn
 import torch.nn.functional as F
+import os
+import json
 from constants import IDX_TO_ANSWER
 
 class ModelLoader:
@@ -39,7 +41,7 @@ class ModelLoader:
         
         self.config = self.model_configs[model_type]
         
-        # Simplified classifier - just a single linear layer
+        # Simplified classifier - single linear layer
         self.classifier = nn.Linear(self.config["hidden_size"], len(IDX_TO_ANSWER))
 
     def _create_combined_model(self, base_model: nn.Module) -> nn.Module:
@@ -53,10 +55,10 @@ class ModelLoader:
             nn.Module: Combined model
         """
         model_dtype = next(base_model.parameters()).dtype
-        
+
         classifier = self.classifier.to(self.device, dtype=model_dtype)
         
-        # Initialize the classifier weights
+        # Initialize classifier weights
         nn.init.xavier_normal_(classifier.weight)
         nn.init.zeros_(classifier.bias)
         
@@ -68,17 +70,14 @@ class ModelLoader:
                 self.is_combined_model = True
             
             def forward(self, **inputs):
-                # Ensure output_hidden_states is True
-                inputs['output_hidden_states'] = True
+                # Get base model outputs
+                outputs = self.base_model(**inputs, output_hidden_states=True)
                 
-                # Get the base model outputs
-                outputs = self.base_model(**inputs)
-                
-                # Extract hidden states from a specific layer (layer 12)
-                hidden_states = outputs.hidden_states[12]
+                # Extract last hidden state from the last layer
+                hidden_states = outputs.hidden_states[-1]  # Always use the last layer
                 last_hidden_state = hidden_states[:, -1, :]
                 
-                # Apply classifier directly
+                # Apply classifier
                 logits = self.classifier(last_hidden_state)
                 
                 # Apply temperature scaling
@@ -98,21 +97,17 @@ class ModelLoader:
                 """
                 Save both the base model and classifier state
                 """
-                # Save base model
                 self.base_model.save_pretrained(save_dir, **kwargs)
                 
-                # Save classifier separately
-                classifier_path = f"{save_dir}/classifier.pt"
+                classifier_path = os.path.join(save_dir, "classifier.pt")
                 torch.save(self.classifier.state_dict(), classifier_path)
                 
-                # Save config indicating this is a combined model
+                # Save config
                 model_config = {
                     "is_combined_model": True,
                     "classifier_path": "classifier.pt"
                 }
-                
-                import json
-                with open(f"{save_dir}/combined_model_config.json", 'w') as f:
+                with open(os.path.join(save_dir, "combined_model_config.json"), 'w') as f:
                     json.dump(model_config, f)
         
         return CombinedModel(base_model, classifier)
@@ -122,26 +117,21 @@ class ModelLoader:
         Load the model with an added classifier layer for fine-tuning.
         
         Returns:
-            Tuple[nn.Module, nn.Module]: Combined model and tokenizer
+            Tuple[nn.Module, nn.Module]: Combined model and processor
         """
-        tokenizer = AutoTokenizer.from_pretrained(
-            self.config["name"],
-            trust_remote_code=True
-        )
+        processor = AutoProcessor.from_pretrained(self.config["name"])
         
         base_model = AutoModelForCausalLM.from_pretrained(
             self.config["name"],
             device_map="auto",
-            trust_remote_code=True,
             torch_dtype=torch.float16,
-            output_hidden_states=True
-        )
-        
-        base_model = base_model.to(self.device)
+            output_hidden_states=True,
+            trust_remote_code=True
+        ).to(self.device)
         
         combined_model = self._create_combined_model(base_model)
         
-        return combined_model, tokenizer
+        return combined_model, processor
 
     def load_from_checkpoint(self, checkpoint_path: str) -> Tuple[nn.Module, nn.Module]:
         """
@@ -151,29 +141,18 @@ class ModelLoader:
             checkpoint_path (str): Path to the fine-tuned model checkpoint
             
         Returns:
-            Tuple[nn.Module, nn.Module]: Fine-tuned model and tokenizer
+            Tuple[nn.Module, nn.Module]: Fine-tuned model and processor
         """
-        import os
-        import json
+        processor = AutoProcessor.from_pretrained(checkpoint_path)
         
-        # Load tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(
-            checkpoint_path,
-            trust_remote_code=True
-        )
-        
-        # Load base model
         base_model = AutoModelForCausalLM.from_pretrained(
             checkpoint_path,
             device_map="auto",
-            trust_remote_code=True,
             torch_dtype=torch.float16,
-            output_hidden_states=True
-        )
+            output_hidden_states=True,
+            trust_remote_code=True
+        ).to(self.device)
         
-        base_model = base_model.to(self.device)
-        
-        # Check if this is a combined model by looking for the config file
         combined_config_path = os.path.join(checkpoint_path, "combined_model_config.json")
         
         if os.path.exists(combined_config_path):
@@ -181,58 +160,43 @@ class ModelLoader:
                 combined_config = json.load(f)
             
             if combined_config.get("is_combined_model", False):
-                # Create combined model
                 combined_model = self._create_combined_model(base_model)
                 
-                # Load classifier weights
                 classifier_path = os.path.join(checkpoint_path, combined_config["classifier_path"])
                 if os.path.exists(classifier_path):
                     classifier_state_dict = torch.load(classifier_path, map_location=self.device)
                     combined_model.classifier.load_state_dict(classifier_state_dict)
                 
-                return combined_model, tokenizer
+                return combined_model, processor
         
-        combined_model = self._create_combined_model(base_model)
-        
-        return combined_model, tokenizer
+        return base_model, processor
 
     def load_base_model(self) -> Tuple[nn.Module, nn.Module]:
         """
         Load just the base model for text generation, without the classifier.
         
         Returns:
-            Tuple[nn.Module, nn.Module]: Base model and tokenizer
+            Tuple[nn.Module, nn.Module]: Base model and processor
         """
-        tokenizer = AutoTokenizer.from_pretrained(
-            self.config["name"],
-            trust_remote_code=True
-        )
+        processor = AutoProcessor.from_pretrained(self.config["name"])
         
         base_model = AutoModelForCausalLM.from_pretrained(
             self.config["name"],
             device_map="auto",
-            trust_remote_code=True,
-            torch_dtype=torch.float16
-        )
+            torch_dtype=torch.float16,
+            trust_remote_code=True
+        ).to(self.device)
         
-        base_model = base_model.to(self.device)
-        
-        return base_model, tokenizer
+        return base_model, processor
 
-    def save_model(self, model: nn.Module, tokenizer: nn.Module, save_path: str) -> None:
+    def save_model(self, model: nn.Module, processor: nn.Module, save_path: str) -> None:
         """
-        Save the current model and tokenizer.
+        Save the current model and processor.
         
         Args:
             model (nn.Module): Model to save
-            tokenizer (nn.Module): Tokenizer to save
-            save_path (str): Path to save the model and tokenizer
+            processor (nn.Module): Processor to save
+            save_path (str): Path to save the model and processor
         """
-        if hasattr(model, 'is_combined_model') and model.is_combined_model:
-            # Use the custom save_pretrained method for combined models
-            model.save_pretrained(save_path)
-            tokenizer.save_pretrained(save_path)
-        else:
-            # Regular save for base models
-            model.save_pretrained(save_path)
-            tokenizer.save_pretrained(save_path)
+        model.save_pretrained(save_path)
+        processor.save_pretrained(save_path)

@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
 from PIL import Image
-import torchvision.transforms as transforms
 from typing import Optional, Dict, Union
 from model_loader import ModelLoader
 import requests
@@ -10,50 +9,23 @@ import os
 from constants import EXAM_QUESTION_PROMPT, IDX_TO_ANSWER
 
 class ExamInferencer:
-    def __init__(
-        self,
-        model_type: str,
-        checkpoint_path: Optional[str] = None,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu"
-    ):
+    def __init__(self, model_type: str, device: str = "cuda" if torch.cuda.is_available() else "cpu"):
         """
-        Initialize the inferencer.
+        Initialize the inferencer using ModelLoader.
         
         Args:
-            model_type (str): Type of model to use ("gemma-it" or "gemma-pt")
-            checkpoint_path (Optional[str]): Path to a checkpoint to use
+            model_type (str): Type of model to use
             device (str): Device to run inference on ("cuda" or "cpu")
         """
         self.model_type = model_type
         self.device = device
         
-        # Initialize model loader
+        # Load model and tokenizer using ModelLoader
         self.model_loader = ModelLoader(model_type, device)
-        self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
-        
-        # Answer mapping
-        self.idx_to_answer = IDX_TO_ANSWER
-        
-        # Image preprocessing
-        self.image_transform = transforms.Compose([
-            transforms.Resize((224, 224)),  # Resize to common size
-            transforms.ToTensor(),          # Convert to tensor
-            transforms.Normalize(            # Normalize for model
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            )
-        ])
-
+        self.model, self.processor = self.model_loader.load_base_model()
+    
     def load_image(self, image_source: str) -> Image.Image:
-        """
-        Load and preprocess an image from either a URL or local path.
-        
-        Args:
-            image_source (str): URL or path to the image file
-            
-        Returns:
-            Image.Image: Preprocessed image
-        """
+        """Load an image from a URL or local path."""
         try:
             if image_source.startswith(('http://', 'https://')):
                 response = requests.get(image_source, timeout=10)
@@ -69,103 +41,80 @@ class ExamInferencer:
             raise ValueError(f"Error downloading image from URL: {e}")
         except Exception as e:
             raise ValueError(f"Error loading image: {e}")
-
+    
     def predict_answer(self, image_source: str) -> Dict:
-        """
-        Predict the answer for an exam question image.
+        """Generate an answer using both image and text input."""
+        pil_image = self.load_image(image_source)
         
-        Args:
-            image_source (str): URL or path to the input image
-            
-        Returns:
-            Dict: Dictionary containing predicted answer and confidence scores
-        """
-        try:
-            pil_image = self.load_image(image_source)
-            image = self.image_transform(pil_image).unsqueeze(0)
-        except Exception as e:
-            return {
-                'error': str(e),
-                'predicted_answer': None,
-                'confidence_scores': None
-            }
-        
-        inputs = self.tokenizer(
-            EXAM_QUESTION_PROMPT,
+        inputs = self.processor(
+            text=EXAM_QUESTION_PROMPT,
+            images=pil_image,
             return_tensors="pt",
             max_length=512,
             padding=True,
             truncation=True
-        )
-        
-        # Move inputs and image to device
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-        image = image.to(self.device)
+        ).to(self.device)
         
         self.model.eval()
         with torch.no_grad():
-            try:
-                # Get model outputs
-                outputs = self.model(
-                    **inputs,
-                    images=image,
-                    output_hidden_states=True
-                )
-                
-                # Get probabilities from the combined model
-                probabilities = outputs.probabilities[0]  # Get first batch item
-                
-                # Get predicted answer
-                pred_idx = torch.argmax(probabilities).item()
-                predicted_answer = self.idx_to_answer[pred_idx]
-                
-                # Get confidence scores for all options
-                confidence_scores = {
-                    answer: float(probabilities[idx].item())
-                    for idx, answer in self.idx_to_answer.items()
-                }
-                
-            except Exception as e:
-                return {
-                    'error': f"Inference error: {str(e)}",
-                    'predicted_answer': None,
-                    'confidence_scores': None
-                }
-        
+            generated_ids = self.model.generate(
+                input_ids=inputs.input_ids,
+                attention_mask=inputs.attention_mask,
+                max_new_tokens=512,
+                temperature=0.7,
+                do_sample=True
+            )
+            
+            generated_text = self.processor.tokenizer.decode(
+                generated_ids[0], 
+                skip_special_tokens=True
+            )
+            
+            return {
+                'predicted_answer': self._extract_answer(generated_text),
+                'generated_text': generated_text,
+                'image_metadata': self._get_image_metadata(pil_image),
+                'error': None
+            }
+    
+    def _get_image_metadata(self, image: Image.Image) -> dict:
+        """Extract basic image metadata."""
         return {
-            'predicted_answer': predicted_answer,
-            'confidence_scores': confidence_scores,
-            'source_type': 'url' if image_source.startswith(('http://', 'https://')) else 'local'
+            'format': image.format,
+            'width': image.width,
+            'height': image.height,
+            'mode': image.mode
         }
+    
+    def _extract_answer(self, generated_text: str) -> str:
+        """Extract the final answer from the generated text."""
+        for answer in IDX_TO_ANSWER.values():
+            if answer.lower() in generated_text.lower():
+                return answer
+        return generated_text.split('.')[0].strip()
+
 
 def main():
-    """
-    Example usage of the ExamInferencer class.
-    """
     import argparse
     
-    parser = argparse.ArgumentParser(description="Predict answer for exam question image")
-    parser.add_argument("--model", choices=["gemma-it", "gemma-pt"], required=True,
-                      help="Model type to use")
-    parser.add_argument("--image", required=True,
-                      help="URL or path to the input image")
-    parser.add_argument("--checkpoint", help="Path to a model checkpoint")
+    parser = argparse.ArgumentParser(description="Generate an answer for an exam question with image context")
+    parser.add_argument("--model", required=True, help="Model type to use")
+    parser.add_argument("--image", required=True, help="URL or path to the input image")
     
     args = parser.parse_args()
     
-    inferencer = ExamInferencer(args.model, args.checkpoint)
-    
+    inferencer = ExamInferencer(args.model)
     result = inferencer.predict_answer(args.image)
     
-    if 'error' in result:
+    if result['error']:
         print(f"\nError: {result['error']}")
     else:
-        print("\nPrediction Results:")
-        print(f"Image Source Type: {result['source_type']}")
-        print(f"Predicted Answer: {result['predicted_answer']}")
-        print("\nConfidence Scores:")
-        for answer, score in result['confidence_scores'].items():
-            print(f"{answer}: {score:.4f}")
+        print("\nImage Context:")
+        print(f"Format: {result['image_metadata']['format']}")
+        print(f"Dimensions: {result['image_metadata']['width']}x{result['image_metadata']['height']}")
+        print(f"\nGenerated Answer: {result['predicted_answer']}")
+        print(f"\nFull Generation:\n{result['generated_text']}")
+
 
 if __name__ == "__main__":
-    main() 
+    main()
