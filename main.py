@@ -55,7 +55,7 @@ def main():
         result = inferencer.predict_answer(args.image)
         
         if result['error']:
-            print(f"Error: {result['error']}") 
+            print(f"Error: {result['error']}")
         else:
             print("\nPrediction Results:")
             print(f"Predicted Answer: {result['predicted_answer']}")

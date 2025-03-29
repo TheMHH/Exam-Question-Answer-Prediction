@@ -62,18 +62,27 @@ class ExamInferencer:
             padding=True,
             truncation=True
         ).to(self.device)
-        
-        if torch.isnan(inputs.input_ids).any() or torch.isinf(inputs.input_ids).any():
-            return {'error': 'Invalid input tensor values detected'}
-        
+                
         self.model.eval()
         with torch.no_grad():
+            # Add a custom logits processor to handle NaN/Inf values
+            def logits_processor(input_ids, scores):
+                # Replace any NaN or Inf values with a very negative number
+                scores = torch.where(torch.isnan(scores) | torch.isinf(scores), 
+                                    torch.tensor(-1e9, device=scores.device), 
+                                    scores)
+                # Ensure no negative probabilities after softmax
+                # (though softmax should handle this already)
+                return scores
+            
+            # Try with safer generation parameters
             generated_ids = self.model.generate(
                 input_ids=inputs.input_ids,
                 attention_mask=inputs.attention_mask,
-                max_new_tokens=512,
-                temperature=0.7,
-                do_sample=True
+                max_new_tokens=64,  # Start smaller
+                do_sample=False,    # Greedy decoding is more stable
+                num_beams=1,        # Simple beam search
+                logits_processor=[logits_processor]  # Custom processor
             )
             
             generated_text = self.processor.tokenizer.decode(
