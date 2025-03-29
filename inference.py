@@ -63,15 +63,10 @@ class ExamInferencer:
         self.model.eval()
         with torch.no_grad():
             generated_ids = self.model.generate(
-                input_ids=inputs.input_ids,
-                attention_mask=inputs.attention_mask,
-                max_new_tokens=250,
+                **inputs, max_new_tokens=250
             )
             
-            generated_text = self.processor.tokenizer.decode(
-                generated_ids[0], 
-                skip_special_tokens=True
-            )
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             
             return {
                 'generated_text': generated_text,
