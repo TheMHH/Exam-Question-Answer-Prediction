@@ -36,7 +36,7 @@ class ExamInferencer:
                     raise FileNotFoundError(f"Image file not found: {image_source}")
                 image = Image.open(image_source)
             
-            return image
+            return image.convert("RGB")
         except requests.RequestException as e:
             raise ValueError(f"Error downloading image from URL: {e}")
         except Exception as e:
@@ -59,8 +59,6 @@ class ExamInferencer:
             images=pil_image,
             return_tensors="pt",
             max_length=512,
-            padding=True,
-            truncation=True
         ).to(self.device)
                 
         self.model.eval()
