@@ -43,6 +43,10 @@ EXAM_QUESTION_CHAT_TEMPLATE = [
     },
 ]
 
+EXTRACT_ANSWER_PROMPT = """
+    After analyzing the question and options, respond with only the correct answer choice (A, B, C, D, or E) in a single word. Do not include explanations, reasoning, or any other text.
+"""
+
 ANSWER_TO_IDX = {
     'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4
 }
