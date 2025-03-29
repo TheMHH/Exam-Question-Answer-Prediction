@@ -1,4 +1,4 @@
-from transformers import AutoProcessor, AutoModelForCausalLM
+from transformers import AutoProcessor, AutoModelForImageTextToText
 import torch
 from typing import Tuple
 import torch.nn as nn
@@ -121,7 +121,7 @@ class ModelLoader:
         """
         processor = AutoProcessor.from_pretrained(self.config["name"])
         
-        base_model = AutoModelForCausalLM.from_pretrained(
+        base_model = AutoModelForImageTextToText.from_pretrained(
             self.config["name"],
             device_map="auto",
             torch_dtype=torch.float16,
@@ -145,7 +145,7 @@ class ModelLoader:
         """
         processor = AutoProcessor.from_pretrained(checkpoint_path)
         
-        base_model = AutoModelForCausalLM.from_pretrained(
+        base_model = AutoModelForImageTextToText.from_pretrained(
             checkpoint_path,
             device_map="auto",
             torch_dtype=torch.float16,
@@ -180,7 +180,7 @@ class ModelLoader:
         """
         processor = AutoProcessor.from_pretrained(self.config["name"])
         
-        base_model = AutoModelForCausalLM.from_pretrained(
+        base_model = AutoModelForImageTextToText.from_pretrained(
             self.config["name"],
             device_map="auto",
             torch_dtype=torch.float16,
