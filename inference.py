@@ -63,6 +63,9 @@ class ExamInferencer:
             truncation=True
         ).to(self.device)
         
+        if torch.isnan(inputs.input_ids).any() or torch.isinf(inputs.input_ids).any():
+            return {'error': 'Invalid input tensor values detected'}
+        
         self.model.eval()
         with torch.no_grad():
             generated_ids = self.model.generate(
