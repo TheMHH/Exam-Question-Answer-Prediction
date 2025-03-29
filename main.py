@@ -56,9 +56,8 @@ def main():
         
         print("\nPrediction Results:")
         print(f"Predicted Answer: {result['predicted_answer']}")
-        print("\nConfidence Scores:")
-        for answer, score in result['confidence_scores'].items():
-            print(f"{answer}: {score:.4f}")
+        print("Generated Text:")
+        print(result['generated_text'])
 
 if __name__ == "__main__":
     main() 

@@ -73,18 +73,8 @@ class ExamInferencer:
             return {
                 'predicted_answer': self._extract_answer(generated_text),
                 'generated_text': generated_text,
-                'image_metadata': self._get_image_metadata(pil_image),
                 'error': None
             }
-    
-    def _get_image_metadata(self, image: Image.Image) -> dict:
-        """Extract basic image metadata."""
-        return {
-            'format': image.format,
-            'width': image.width,
-            'height': image.height,
-            'mode': image.mode
-        }
     
     def _extract_answer(self, generated_text: str) -> str:
         """Extract the final answer from the generated text."""
