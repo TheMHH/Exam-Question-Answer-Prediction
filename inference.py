@@ -58,7 +58,6 @@ class ExamInferencer:
             text=prompt,
             images=pil_image,
             return_tensors="pt",
-            max_length=512,
         ).to(self.device)
                 
         self.model.eval()
