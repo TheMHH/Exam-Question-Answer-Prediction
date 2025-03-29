@@ -124,7 +124,7 @@ class ModelLoader:
         base_model = AutoModelForImageTextToText.from_pretrained(
             self.config["name"],
             device_map="auto",
-            torch_dtype=torch.float16,
+            torch_dtype=torch.bfloat16,
             output_hidden_states=True,
             trust_remote_code=True
         ).to(self.device)
@@ -148,7 +148,7 @@ class ModelLoader:
         base_model = AutoModelForImageTextToText.from_pretrained(
             checkpoint_path,
             device_map="auto",
-            torch_dtype=torch.float16,
+            torch_dtype=torch.bfloat16,
             output_hidden_states=True,
             trust_remote_code=True
         ).to(self.device)
@@ -183,7 +183,7 @@ class ModelLoader:
         base_model = AutoModelForImageTextToText.from_pretrained(
             self.config["name"],
             device_map="auto",
-            torch_dtype=torch.float16,
+            torch_dtype=torch.bfloat16,
             trust_remote_code=True
         ).to(self.device)
         
