@@ -58,7 +58,6 @@ def main():
             print(f"Error: {result['error']}")
         else:
             print("\nPrediction Results:")
-            print("Generated Text:")
             print(result['generated_text'])
 
 if __name__ == "__main__":
