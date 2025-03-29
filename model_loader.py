@@ -23,12 +23,12 @@ class ModelLoader:
         
         self.model_configs = {
             "gemma-it": {
-                "name": "google/gemma-2b-it",
+                "name": "google/gemma-3-4b-it",
                 "max_length": 2048,
                 "hidden_size": 2560
             },
             "gemma-pt": {
-                "name": "google/gemma-2b",
+                "name": "google/gemma-3-4b-pt",
                 "max_length": 2048,
                 "hidden_size": 2560
             }
