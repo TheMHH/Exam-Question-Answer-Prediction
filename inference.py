@@ -52,7 +52,6 @@ class ExamInferencer:
             tokenize=False,
             add_generation_prompt=True
         )
-        print(prompt)
         
         inputs = self.processor(
             text=prompt,
