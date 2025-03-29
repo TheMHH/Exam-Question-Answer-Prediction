@@ -58,7 +58,7 @@ class ExamInferencer:
             text=prompt,
             images=pil_image,
             return_tensors="pt",
-        ).to(self.device)
+        ).to(self.device, torch.bfloat16)
                 
         self.model.eval()
         with torch.no_grad():
