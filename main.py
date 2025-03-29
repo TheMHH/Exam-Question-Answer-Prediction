@@ -54,10 +54,13 @@ def main():
         
         result = inferencer.predict_answer(args.image)
         
-        print("\nPrediction Results:")
-        print(f"Predicted Answer: {result['predicted_answer']}")
-        print("Generated Text:")
-        print(result['generated_text'])
+        if result['error']:
+            print(f"Error: {result['error']}") 
+        else:
+            print("\nPrediction Results:")
+            print(f"Predicted Answer: {result['predicted_answer']}")
+            print("Generated Text:")
+            print(result['generated_text'])
 
 if __name__ == "__main__":
     main() 
