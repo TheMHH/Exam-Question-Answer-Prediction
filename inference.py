@@ -6,7 +6,7 @@ from model_loader import ModelLoader
 import requests
 from io import BytesIO
 import os
-from constants import EXAM_QUESTION_PROMPT, IDX_TO_ANSWER
+from constants import EXAM_QUESTION_CHAT_TEMPLATE, IDX_TO_ANSWER
 
 class ExamInferencer:
     def __init__(self, model_type: str, device: str = "cuda" if torch.cuda.is_available() else "cpu"):
@@ -46,8 +46,15 @@ class ExamInferencer:
         """Generate an answer using both image and text input."""
         pil_image = self.load_image(image_source)
         
+        
+        prompt = self.processor.apply_chat_template(
+            EXAM_QUESTION_CHAT_TEMPLATE,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        
         inputs = self.processor(
-            text=EXAM_QUESTION_PROMPT,
+            text=prompt,
             images=pil_image,
             return_tensors="pt",
             max_length=512,
