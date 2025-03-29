@@ -31,7 +31,9 @@ EXAM_QUESTION_PROMPT =  """Let's analyze this exam question step by step:
 
         Choose the option that best fits both the question and the supporting visuals.
 
-        Justify why other options are incorrect (if possible)."""
+        Justify why other options are incorrect (if possible).
+        
+        Do not add any text after providing Final Answer"""
 
 EXAM_QUESTION_CHAT_TEMPLATE = [
     {
