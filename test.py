@@ -31,7 +31,7 @@ class ExamEvaluator:
         # Initialize model and data loaders
         self.model_loader = ModelLoader(model_type, device)
         self.data_loader = ExamDataLoader(batch_size=batch_size)
-        self.model, self.tokenizer = self.model_loader.load_model(checkpoint_path)
+        self.model, self.tokenizer = self.model_loader.load_from_checkpoint(checkpoint_path)
         
         # Answer mapping for converting numeric predictions back to letters
         self.idx_to_answer = IDX_TO_ANSWER
