@@ -62,16 +62,27 @@ class ExamInferencer:
         self.model.eval()
         with torch.no_grad():
             generated_ids = self.model.generate(
-                **inputs, max_new_tokens=500
+                **inputs, 
+                max_new_tokens=500,
+                pad_token_id=self.processor.tokenizer.pad_token_id,
+                eos_token_id=self.processor.tokenizer.eos_token_id
             )
             
-            generated_text = self.processor.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+            # Get the full generated text
+            full_text = self.processor.tokenizer.decode(generated_ids[0], skip_special_tokens=False)
+            print(f"Full text: {full_text}")
             
-            # generated_text = self.processor.decode(generated_ids, skip_special_tokens=True)[0]
+            # Split by the assistant marker and take the last part
+            # This assumes the model uses "assistant" as the role marker
+            parts = full_text.split("model")
             
+            if len(parts) > 1:
+                response = parts[-1].strip()
+            else:
+                response = full_text.strip()
             
             return {
-                'generated_text': generated_text,
+                'generated_text': response,
                 'error': None
             }
 
