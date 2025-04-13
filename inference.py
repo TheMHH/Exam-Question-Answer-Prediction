@@ -68,26 +68,10 @@ class ExamInferencer:
             
         full_text = self.processor.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
         parts = full_text.split("model")
-        model_response = parts[-1].strip() if len(parts) > 1 else full_text.strip()
-
-        extract_prompt = EXTRACT_ANSWER_PROMPT.format(model_response)
-        extract_inputs = self.processor(
-            text=extract_prompt,
-            return_tensors="pt",
-        ).to(self.device, torch.bfloat16)
-         
-        with torch.no_grad():    
-            answer_ids = self.model.generate(
-                **extract_inputs,
-                max_new_tokens=30,  
-            )
+        model_response = parts[-1].strip() if len(parts) > 1 else full_text.strip()  
             
-        final_answer = self.processor.tokenizer.decode(answer_ids[0], skip_special_tokens=True).strip()
-        print(f"Final answer: {final_answer}")
-        
         return {
             'generated_text': model_response,
-            'final_answer': final_answer,
             'error': None
         }
 
