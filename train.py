@@ -66,7 +66,7 @@ class ExamTrainer:
         Train the model.
         """
         # Get data loaders
-        train_loader, val_loader, _ = self.data_loader.get_all_splits(self.tokenizer)
+        train_loader, test_loader = self.data_loader.get_all_splits(self.tokenizer)
         
         best_val_acc = 0.0
         
@@ -127,7 +127,7 @@ class ExamTrainer:
             total_val = 0
             
             with torch.no_grad():
-                for batch in val_loader:
+                for batch in test_loader:
                     input_ids = batch['input_ids'].to(self.device)
                     attention_mask = batch['attention_mask'].to(self.device)
                     images = batch['image'].to(self.device)
@@ -148,7 +148,7 @@ class ExamTrainer:
                     correct_val += (predictions == labels).sum().item()
                     total_val += labels.size(0)
             
-            avg_val_loss = total_val_loss / len(val_loader)
+            avg_val_loss = total_val_loss / len(test_loader)
             val_accuracy = correct_val / total_val
             
             print(f"Epoch {epoch + 1}/{self.num_epochs}")

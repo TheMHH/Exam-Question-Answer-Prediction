@@ -4,20 +4,20 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from typing import Dict, List, Optional, Tuple
 import os
-from constants import EXAM_QUESTION_PROMPT, ANSWER_TO_IDX
+from constants import EXAM_QUESTION_CHAT_TEMPLATE, ANSWER_TO_IDX
 
 class ImageTextDataset(Dataset):
-    def __init__(self, dataset: Dict, tokenizer, max_length: int = 512):
+    def __init__(self, dataset: Dict, processor, max_length: int = 512):
         """
         Initialize the dataset.
         
         Args:
             dataset (Dict): Dataset dictionary from Hugging Face datasets
-            tokenizer: Tokenizer for text processing
+            processor: Processor for text and image processing
             max_length (int): Maximum sequence length for tokenization
         """
         self.dataset = dataset
-        self.tokenizer = tokenizer
+        self.processor = processor
         self.max_length = max_length
         self.answer_mapping = ANSWER_TO_IDX
 
@@ -42,19 +42,26 @@ class ImageTextDataset(Dataset):
         # Convert answer key to numeric label
         label = self.answer_mapping[item['answer_key']]
         
-        # Tokenize prompt
-        encoding = self.tokenizer(
-            EXAM_QUESTION_PROMPT,
+        # Process text and image using processor
+        prompt = self.processor.apply_chat_template(
+            EXAM_QUESTION_CHAT_TEMPLATE,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        
+        inputs = self.processor(
+            text=prompt,
+            images=image,
+            return_tensors="pt",
             max_length=self.max_length,
             padding='max_length',
-            truncation=True,
-            return_tensors='pt'
+            truncation=True
         )
         
         return {
             'image': image,
-            'input_ids': encoding['input_ids'].squeeze(),
-            'attention_mask': encoding['attention_mask'].squeeze(),
+            'input_ids': inputs['input_ids'].squeeze(),
+            'attention_mask': inputs['attention_mask'].squeeze(),
             'label': torch.tensor(label, dtype=torch.long)
         }
 
@@ -80,12 +87,12 @@ class ExamDataLoader:
         """
         self.dataset = load_dataset("Rocktim/EXAMS-V", split=split)
 
-    def get_dataloader(self, tokenizer, shuffle: bool = True) -> DataLoader:
+    def get_dataloader(self, processor, shuffle: bool = True) -> DataLoader:
         """
         Create a PyTorch DataLoader.
         
         Args:
-            tokenizer: Tokenizer for text processing
+            processor: Processor for text and image processing
             shuffle (bool): Whether to shuffle the data
             
         Returns:
@@ -96,7 +103,7 @@ class ExamDataLoader:
         
         dataset = ImageTextDataset(
             self.dataset,
-            tokenizer,
+            processor,
             max_length=self.max_length
         )
         
@@ -108,25 +115,23 @@ class ExamDataLoader:
             pin_memory=True
         )
 
-    def get_all_splits(self, tokenizer) -> Tuple[DataLoader, DataLoader, DataLoader]:
+    def get_all_splits(self, processor) -> Tuple[DataLoader, DataLoader, DataLoader]:
         """
         Get DataLoaders for all dataset splits.
         
         Args:
-            tokenizer: Tokenizer for text processing
+            processor: Processor for text and image processing
             
         Returns:
             Tuple[DataLoader, DataLoader, DataLoader]: Train, validation, and test dataloaders
         """
         # Load all splits
         train_dataset = load_dataset("Rocktim/EXAMS-V", split="train")
-        val_dataset = load_dataset("Rocktim/EXAMS-V", split="validation")
         test_dataset = load_dataset("Rocktim/EXAMS-V", split="test")
         
         # Create datasets
-        train_ds = ImageTextDataset(train_dataset, tokenizer, self.max_length)
-        val_ds = ImageTextDataset(val_dataset, tokenizer, self.max_length)
-        test_ds = ImageTextDataset(test_dataset, tokenizer, self.max_length)
+        train_ds = ImageTextDataset(train_dataset, processor, self.max_length)
+        test_ds = ImageTextDataset(test_dataset, processor, self.max_length)
         
         # Create dataloaders
         train_loader = torch.utils.data.DataLoader(
@@ -136,14 +141,7 @@ class ExamDataLoader:
             num_workers=4,
             pin_memory=True
         )
-        
-        val_loader = torch.utils.data.DataLoader(
-            val_ds,
-            batch_size=self.batch_size,
-            shuffle=False,
-            num_workers=4,
-            pin_memory=True
-        )
+
         
         test_loader = torch.utils.data.DataLoader(
             test_ds,
@@ -153,4 +151,4 @@ class ExamDataLoader:
             pin_memory=True
         )
         
-        return train_loader, val_loader, test_loader 
+        return train_loader, test_loader 

@@ -33,7 +33,7 @@ EXAM_QUESTION_PROMPT =  """Let's analyze this exam question step by step:
 
         Justify why other options are incorrect (if possible).
         
-        After completing all reasoning steps, respond with answers in order of probability from most to least likely, separated by commas. For example: Final Answer: A, C, B, D, E"""
+        Do not add any text after providing Final Answer"""
 
 EXAM_QUESTION_CHAT_TEMPLATE = [
     {
