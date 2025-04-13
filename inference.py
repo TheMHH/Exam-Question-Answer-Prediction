@@ -6,7 +6,7 @@ from model_loader import ModelLoader
 import requests
 from io import BytesIO
 import os
-from constants import EXAM_QUESTION_CHAT_TEMPLATE, IDX_TO_ANSWER
+from constants import EXAM_QUESTION_CHAT_TEMPLATE, EXTRACT_ANSWER_PROMPT
 
 class ExamInferencer:
     def __init__(self, model_type: str, device: str = "cuda" if torch.cuda.is_available() else "cpu"):
@@ -64,26 +64,33 @@ class ExamInferencer:
             generated_ids = self.model.generate(
                 **inputs, 
                 max_new_tokens=500,
-                pad_token_id=self.processor.tokenizer.pad_token_id,
-                eos_token_id=self.processor.tokenizer.eos_token_id
             )
             
-            # Get the full generated text
-            full_text = self.processor.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+        full_text = self.processor.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+        parts = full_text.split("model")
+        model_response = parts[-1].strip() if len(parts) > 1 else full_text.strip()
 
-            parts = full_text.split("model")
+        extract_prompt = EXTRACT_ANSWER_PROMPT.format(model_response)
+        extract_inputs = self.processor(
+            text=extract_prompt,
+            return_tensors="pt",
+        ).to(self.device, torch.bfloat16)
+         
+        with torch.no_grad():    
+            answer_ids = self.model.generate(
+                **extract_inputs,
+                max_new_tokens=10,  
+                do_sample=False,    
+            )
             
-            if len(parts) > 1:
-                response = parts[-1].strip()
-            else:
-                response = full_text.strip()
-                
-            
-            
-            return {
-                'generated_text': response,
-                'error': None
-            }
+        final_answer = self.processor.tokenizer.decode(answer_ids[0], skip_special_tokens=True).strip()
+        print(f"Final answer: {final_answer}")
+        
+        return {
+            'generated_text': model_response,
+            'final_answer': final_answer,
+            'error': None
+        }
 
 def main():
     import argparse

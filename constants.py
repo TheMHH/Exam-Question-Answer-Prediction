@@ -45,9 +45,8 @@ EXAM_QUESTION_CHAT_TEMPLATE = [
     },
 ]
 
-EXTRACT_ANSWER_PROMPT = """
-    After analyzing the question and options, respond with only the correct answer choice (A, B, C, D, or E) in a single word. Do not include explanations, reasoning, or any other text.
-"""
+EXTRACT_ANSWER_PROMPT = "You are given a response of a model which is answering an exam question. Output the final answer of the model as a single letter: 'A', 'B', 'C', 'D', or 'E'. Response: {}"
+
 
 ANSWER_TO_IDX = {
     'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4
