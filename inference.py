@@ -79,8 +79,7 @@ class ExamInferencer:
         with torch.no_grad():    
             answer_ids = self.model.generate(
                 **extract_inputs,
-                max_new_tokens=10,  
-                do_sample=False,    
+                max_new_tokens=30,  
             )
             
         final_answer = self.processor.tokenizer.decode(answer_ids[0], skip_special_tokens=True).strip()
