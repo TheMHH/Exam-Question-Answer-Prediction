@@ -44,7 +44,7 @@ class ExamEvaluator:
             Dict: Dictionary containing evaluation metrics
         """
         # Get test dataloader
-        _, _, test_loader = self.data_loader.get_all_splits(self.tokenizer)
+        _, test_loader = self.data_loader.get_all_splits(self.tokenizer)
         
         # Initialize lists for predictions and true labels
         all_predictions = []
