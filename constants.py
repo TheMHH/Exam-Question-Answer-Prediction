@@ -33,7 +33,7 @@ EXAM_QUESTION_PROMPT =  """Let's analyze this exam question step by step:
 
         Justify why other options are incorrect (if possible).
         
-        Do not add any text before or after providing Final Answer"""
+        After completing all reasoning steps, respond with only: Final Answer: [your answer]"""
 
 EXAM_QUESTION_CHAT_TEMPLATE = [
     {
