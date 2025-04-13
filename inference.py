@@ -67,8 +67,15 @@ class ExamInferencer:
             
             generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
             
+            # Extract only the assistant's response
+            # Split by the assistant marker and take the last part
+            assistant_response = generated_text.split("assistant")[-1].strip()
+            
+            print(f"Generated text: {generated_text}")
+            print(f"Assistant response: {assistant_response}")
+            
             return {
-                'generated_text': generated_text,
+                'generated_text': assistant_response,
                 'error': None
             }
 
