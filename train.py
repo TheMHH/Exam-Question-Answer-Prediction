@@ -45,7 +45,7 @@ class ExamTrainer:
         # Initialize model and data loaders
         self.model_loader = ModelLoader(model_type, device)
         self.data_loader = ExamDataLoader(batch_size=batch_size)
-        self.model, self.tokenizer = self.model_loader.load_for_finetuning(checkpoint_path)
+        self.model, self.tokenizer = self.model_loader.load_for_finetuning()
         
         # Initialize optimizer and scheduler
         # Use different learning rates for base model and classifier
