@@ -69,17 +69,16 @@ class ExamInferencer:
             )
             
             # Get the full generated text
-            full_text = self.processor.tokenizer.decode(generated_ids[0], skip_special_tokens=False)
-            print(f"Full text: {full_text}")
-            
-            # Split by the assistant marker and take the last part
-            # This assumes the model uses "assistant" as the role marker
+            full_text = self.processor.tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+
             parts = full_text.split("model")
             
             if len(parts) > 1:
                 response = parts[-1].strip()
             else:
                 response = full_text.strip()
+                
+            
             
             return {
                 'generated_text': response,
