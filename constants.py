@@ -48,9 +48,13 @@ EXAM_QUESTION_CHAT_TEMPLATE = [
 EXTRACT_ANSWER_PROMPT = "You are given a response of a model which is answering an exam question. Output the final answer of the model as a single letter: 'A', 'B', 'C', 'D', or 'E'. Response: {}"
 
 
-ANSWER_TO_IDX = {
-    'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4
+ANSWERS_TO_IDX = {
+    'A': 0, 'B': 1, 'C': 2, 'D': 3, 'E': 4,
+    'А': 0, 'Б': 1, 'В': 2, 'Г': 3, 'Д': 4,   # Cyrillic upcase
+    'a': 0, 'b': 1, 'c': 2, 'd': 3, 'e': 4,   # Latin lowercase
+    'а': 0, 'б': 1, 'в': 2, 'г': 3, 'д': 4    # Cyrillic lowercase
 }
+
 
 IDX_TO_ANSWER = {
     0: 'A', 1: 'B', 2: 'C', 3: 'D', 4: 'E'

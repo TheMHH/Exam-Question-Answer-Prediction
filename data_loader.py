@@ -7,7 +7,7 @@ import os
 from constants import EXAM_QUESTION_CHAT_TEMPLATE, ANSWER_TO_IDX
 
 class ImageTextDataset(Dataset):
-    def __init__(self, dataset: Dict, processor, max_length: int = 512):
+    def __init__(self, dataset, processor, max_length = 512):
         """
         Initialize the dataset.
         
@@ -16,11 +16,17 @@ class ImageTextDataset(Dataset):
             processor: Processor for text and image processing
             max_length (int): Maximum sequence length for tokenization
         """
-        self.dataset = dataset
+        self.dataset = dataset.filter(ImageTextDataset.is_valid_example)
         self.processor = processor
         self.max_length = max_length
         self.answer_mapping = ANSWER_TO_IDX
+    
+    @staticmethod
+    def is_valid_example(example):
+        key = example['answer_key']
+        return key in ANSWER_TO_IDX or key.upper() in ANSWER_TO_IDX
 
+    
     def __len__(self) -> int:
         return len(self.dataset)
 
