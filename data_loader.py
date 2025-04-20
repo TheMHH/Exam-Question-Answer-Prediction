@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from typing import Dict, List, Optional, Tuple
 import os
-from constants import EXAM_QUESTION_CHAT_TEMPLATE, ANSWER_TO_IDX
+from constants import EXAM_QUESTION_CHAT_TEMPLATE, ANSWERS_TO_IDX
 
 class ImageTextDataset(Dataset):
     def __init__(self, dataset, processor, max_length = 512):
@@ -19,12 +19,12 @@ class ImageTextDataset(Dataset):
         self.dataset = dataset.filter(ImageTextDataset.is_valid_example)
         self.processor = processor
         self.max_length = max_length
-        self.answer_mapping = ANSWER_TO_IDX
+        self.answer_mapping = ANSWERS_TO_IDX
     
     @staticmethod
     def is_valid_example(example):
         key = example['answer_key']
-        return key in ANSWER_TO_IDX or key.upper() in ANSWER_TO_IDX
+        return key in ANSWERS_TO_IDX or key.upper() in ANSWERS_TO_IDX
 
     
     def __len__(self) -> int:
