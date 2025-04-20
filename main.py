@@ -1,7 +1,7 @@
 import argparse
 import os
 from train import ExamTrainer
-from test import ExamEvaluator
+from validate import ExamEvaluator
 from inference import ExamInferencer
 
 def main():
