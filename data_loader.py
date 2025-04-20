@@ -36,13 +36,10 @@ class ImageTextDataset(Dataset):
         """
         item = self.dataset[idx]
         
-        # Process image
-        image = Image.open(item['image']).convert('RGB')
+        image = item['image']
         
-        # Convert answer key to numeric label
         label = self.answer_mapping[item['answer_key']]
         
-        # Process text and image using processor
         prompt = self.processor.apply_chat_template(
             EXAM_QUESTION_CHAT_TEMPLATE,
             tokenize=False,
@@ -76,16 +73,6 @@ class ExamDataLoader:
         """
         self.batch_size = batch_size
         self.max_length = max_length
-        self.dataset = None
-
-    def load_dataset(self, split: str = "train") -> None:
-        """
-        Load the Rocktim/EXAMS-V dataset.
-        
-        Args:
-            split (str): Dataset split to load ("train", "validation", or "test")
-        """
-        self.dataset = load_dataset("Rocktim/EXAMS-V", split=split)
 
     def get_dataloader(self, processor, shuffle: bool = True) -> DataLoader:
         """
@@ -98,11 +85,8 @@ class ExamDataLoader:
         Returns:
             DataLoader: PyTorch DataLoader instance
         """
-        if self.dataset is None:
-            raise ValueError("Dataset must be loaded before creating DataLoader")
-        
         dataset = ImageTextDataset(
-            self.dataset,
+            load_dataset("Rocktim/EXAMS-V"),
             processor,
             max_length=self.max_length
         )
