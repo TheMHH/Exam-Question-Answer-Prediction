@@ -16,11 +16,10 @@ class ImageTextDataset(Dataset):
             processor: Processor for text and image processing
             max_length (int): Maximum sequence length for tokenization
         """
-        self.dataset = dataset.filter(
-            ImageTextDataset.is_valid_example,
-            num_proc=4,
-            load_from_cache_file=True,
-        )
+        # self.dataset = dataset.filter(
+        #     ImageTextDataset.is_valid_example,
+        # )
+        self.dataset = dataset
         self.processor = processor
         self.max_length = max_length
         self.answer_mapping = ANSWERS_TO_IDX
@@ -48,7 +47,7 @@ class ImageTextDataset(Dataset):
         
         image = item['image']
         
-        label = self.answer_mapping[item['answer_key']]
+        label = self.answer_mapping.get(item['answer_key'], 0)
         
         prompt = self.processor.apply_chat_template(
             EXAM_QUESTION_CHAT_TEMPLATE,
