@@ -45,7 +45,6 @@ class ImageTextDataset(Dataset):
         """
         item = self.dataset[idx]
         
-        raise Exception("asdasd")
         image = item['image'].convert("RGB")
         
         label = self.answer_mapping.get(item['answer_key'], 0)

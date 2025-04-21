@@ -74,28 +74,3 @@ class ExamInferencer:
             'generated_text': model_response,
             'error': None
         }
-
-def main():
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Generate an answer for an exam question with image context")
-    parser.add_argument("--model", required=True, help="Model type to use")
-    parser.add_argument("--image", required=True, help="URL or path to the input image")
-    
-    args = parser.parse_args()
-    
-    inferencer = ExamInferencer(args.model)
-    result = inferencer.predict_answer(args.image)
-    
-    if result['error']:
-        print(f"\nError: {result['error']}")
-    else:
-        print("\nImage Context:")
-        print(f"Format: {result['image_metadata']['format']}")
-        print(f"Dimensions: {result['image_metadata']['width']}x{result['image_metadata']['height']}")
-        print(f"\nGenerated Answer: {result['predicted_answer']}")
-        print(f"\nFull Generation:\n{result['generated_text']}")
-
-
-if __name__ == "__main__":
-    main()
