@@ -45,7 +45,7 @@ class ImageTextDataset(Dataset):
         """
         item = self.dataset[idx]
         
-        image = item['image']
+        image = item['image'].convert("RGB")
         
         label = self.answer_mapping.get(item['answer_key'], 0)
         
