@@ -16,7 +16,11 @@ class ImageTextDataset(Dataset):
             processor: Processor for text and image processing
             max_length (int): Maximum sequence length for tokenization
         """
-        self.dataset = dataset.filter(ImageTextDataset.is_valid_example)
+        self.dataset = dataset.filter(
+            ImageTextDataset.is_valid_example,
+            num_proc=4,
+            load_from_cache_file=True,
+        )
         self.processor = processor
         self.max_length = max_length
         self.answer_mapping = ANSWERS_TO_IDX
